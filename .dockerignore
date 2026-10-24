@@ -1,0 +1,12 @@
+.git/
+.env
+.env.*
+node_modules/
+data/*.db*
+data/admin-credentials.txt
+server.log
+server.err.log
+shots/
+tests/
+docs/
+*.zip
