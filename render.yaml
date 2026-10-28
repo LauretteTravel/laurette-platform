@@ -1,0 +1,28 @@
+# Render Blueprint — نشر تطبيق Node + SQLite
+# ملاحظة مهمة: SQLite يحتاج قرصًا دائمًا (disk). الخطة المجانية بلا قرص دائم،
+# لذلك الطلبات ستُمحى مع كل إعادة نشر. استخدم Starter أو أعلى، أو انقل البيانات إلى Postgres لاحقًا.
+services:
+  - type: web
+    name: laurette-platform
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: node -v
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      # يُضبط يدويًا من لوحة Render (لا يُحفظ في المستودع)
+      - key: ADMIN_PASSWORD
+        sync: false
+      # اتركه فارغًا ليُستخدم RENDER_EXTERNAL_URL تلقائيًا للروابط القانونية
+      - key: BASE_URL
+        sync: false
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

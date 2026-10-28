@@ -354,3 +354,13 @@ node tools/build-seed.mjs   # يعيد بناء data/seed.json من المصدر
 node server.js              # البذر التلقائي عند أول تشغيل
 \\n
 لا تُحفظ أي كلمة مرور في seed.json. عند غياب ADMIN_PASSWORD يولّد الخادم كلمة مرور مؤقتة ويكتبها في data/admin-credentials.txt (غير متعقّب في git).
+
+## النشر (Deploy)
+
+| المنصة | الملف | ملاحظة |
+|---|---|---|
+| Railway | ailway.json + Dockerfile | يقرأ RAILWAY_PUBLIC_DOMAIN تلقائيًا |
+| Render | ender.yaml | يحتاج قرصًا دائمًا لـSQLite (الخطة المجانية تفقد البيانات عند كل نشر) |
+| أي خادم Node | ode server.js | اضبط PORT وBASE_URL وADMIN_PASSWORD |
+
+**مهم:** GitHub Pages لا يشغّل هذا التطبيق (Node + SQLite). إن كان Pages مفعّلًا على المستودع فأوقفه من Settings → Pages.
