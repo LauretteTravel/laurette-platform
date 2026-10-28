@@ -505,7 +505,7 @@ const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLTo
 if (isMain) {
   const port = Number(process.env.PORT || 3000);
   const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
-  const baseUrl = process.env.BASE_URL
+  const baseUrl = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL
     || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}:${port}`);
   const app = createApp({ baseUrl });
   app.listen(port, host).then((addr) => {
