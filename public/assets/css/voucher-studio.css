@@ -1,0 +1,213 @@
+/* ============================================================
+   Laurette — Manual Booking Voucher studio (staff only)
+   Visual language copied from the original Laurette Tours
+   voucher design: navy #1e3a8a, orange #ea580c, Playfair + Inter.
+   Scoped under .vs- so nothing else on the site is affected.
+   ============================================================ */
+
+@import url('/assets/fonts/laurette-doc/fonts.css');
+
+.vs-studio {
+  --vs-navy: #1e3a8a;
+  --vs-navy-deep: #15296b;
+  --vs-orange: #ea580c;
+  --vs-orange-soft: #fff4ed;
+  --vs-ink: #1f2937;
+  --vs-muted: #6b7280;
+  --vs-line: #e5e7eb;
+  --vs-bg: #f8fafc;
+  font-family: Inter, Cairo, "Segoe UI", sans-serif;
+  color: var(--vs-ink);
+}
+
+/* ---------- toolbar ---------- */
+.vs-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid var(--vs-line); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.vs-toolbar h2 { font-size: 16px; margin: 0; color: var(--vs-navy); }
+.vs-toolbar .vs-sub { font-size: 12px; color: var(--vs-muted); }
+.vs-toolbar .spacer { flex: 1; }
+.vs-toolbar .vs-draft { font-size: 11.5px; color: var(--vs-muted); }
+.vs-btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--vs-line);
+  background: #fff; color: var(--vs-navy); border-radius: 10px; padding: 8px 12px;
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.vs-btn:hover { background: #f1f5f9; }
+.vs-btn.is-primary { background: var(--vs-navy); border-color: var(--vs-navy); color: #fff; }
+.vs-btn.is-primary:hover { background: var(--vs-navy-deep); }
+.vs-btn.is-accent { background: var(--vs-orange); border-color: var(--vs-orange); color: #fff; }
+.vs-btn[disabled] { opacity: .55; cursor: not-allowed; }
+
+/* ---------- layout ---------- */
+.vs-layout { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(420px, 1.05fr); gap: 14px; align-items: start; }
+@media (max-width: 1180px) { .vs-layout { grid-template-columns: 1fr; } }
+
+.vs-form { min-width: 0; background: #fff; border: 1px solid var(--vs-line); border-radius: 14px; overflow: hidden; }
+.vs-steps { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--vs-line); background: #f8fafc; }
+.vs-steps button {
+  border: 1px solid transparent; background: transparent; border-radius: 999px; padding: 6px 10px;
+  font: inherit; font-size: 11.5px; font-weight: 700; color: var(--vs-muted); cursor: pointer; white-space: nowrap;
+}
+.vs-steps button.is-active { background: var(--vs-navy); color: #fff; }
+.vs-steps button.is-done { color: var(--vs-orange); }
+
+.vs-step { padding: 16px; }
+.vs-step h3 { margin: 0 0 4px; font-size: 15px; color: var(--vs-navy); }
+.vs-hint { font-size: 12px; color: var(--vs-muted); margin: 0 0 14px; }
+
+.vs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.vs-grid .vs-full { grid-column: 1 / -1; }
+@media (max-width: 640px) { .vs-grid { grid-template-columns: 1fr; } }
+
+.vs-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+.vs-field > span { font-weight: 700; color: #334155; font-size: 11.5px; }
+.vs-field input, .vs-field select, .vs-field textarea {
+  font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #dbe3ec;
+  border-radius: 9px; background: #fff; color: var(--vs-ink); width: 100%; box-sizing: border-box;
+}
+.vs-field textarea { resize: vertical; min-height: 74px; line-height: 1.5; }
+.vs-field input:focus, .vs-field select:focus, .vs-field textarea:focus { outline: 2px solid rgba(30, 58, 138, .18); border-color: var(--vs-navy); }
+
+.vs-actions { display: flex; gap: 8px; padding: 0 16px 16px; }
+.vs-actions .spacer { flex: 1; }
+
+/* dynamic rows */
+.vs-row-card { border: 1px solid var(--vs-line); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #fcfdff; position: relative; }
+.vs-row-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.vs-row-head b { font-size: 12px; color: var(--vs-navy); }
+.vs-row-head .spacer { flex: 1; }
+.vs-icon-btn { border: 1px solid var(--vs-line); background: #fff; border-radius: 8px; width: 28px; height: 28px; cursor: pointer; color: #b91c1c; font-weight: 800; line-height: 1; }
+.vs-add { border: 1px dashed #c7d2e0; background: #fff; color: var(--vs-navy); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; width: 100%; }
+.vs-add:hover { background: #f1f5f9; }
+
+.vs-empty { border: 1px dashed #d7dfe9; border-radius: 10px; padding: 12px; color: var(--vs-muted); font-size: 12px; text-align: center; }
+
+/* preview column */
+.vs-preview { position: sticky; top: 12px; min-width: 0; }
+.vs-preview-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; color: var(--vs-muted); }
+.vs-preview-head .spacer { flex: 1; }
+.vs-paper-wrap { max-width: 100%; background: #e9edf3; border: 1px solid var(--vs-line); border-radius: 14px; padding: 14px; overflow: auto; max-height: calc(100vh - 150px); }
+.vs-paper-scale { position: relative; margin: 0 auto; overflow: hidden; }
+#vsScale .vs-sheet { position: absolute; top: 0; left: 0; transform-origin: top left; }
+@media (max-width: 1180px) { .vs-preview { position: static; } .vs-paper-wrap { max-height: none; } }
+
+/* mobile tabs */
+.vs-mobile-tabs { display: none; gap: 6px; margin-bottom: 10px; }
+.vs-mobile-tabs button { flex: 1; }
+@media (max-width: 1180px) {
+  .vs-mobile-tabs { display: flex; }
+  .vs-preview { display: none; }
+  .vs-studio[data-pane="preview"] .vs-preview { display: block; }
+  .vs-studio[data-pane="preview"] .vs-form { display: none; }
+}
+
+/* ============================================================
+   THE SHEET — 210 × 297mm, design from the original voucher
+   ============================================================ */
+.vs-sheet {
+  width: 210mm; min-height: 297mm; box-sizing: border-box;
+  padding: 14mm; background: #fff; color: var(--vs-ink);
+  font-family: Inter, Cairo, Arial, sans-serif; font-size: 10pt; line-height: 1.5;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, .18);
+  position: relative;
+}
+.vs-sheet * { box-sizing: border-box; }
+.vs-sheet { direction: ltr; text-align: left; }
+
+.vs-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--vs-navy); padding-bottom: 5mm; margin-bottom: 4mm; }
+.vs-brand { display: flex; flex-direction: column; gap: 1mm; }
+.vs-brand img { height: 16mm; width: auto; object-fit: contain; }
+.vs-brand-tagline { font-size: 7.5pt; color: var(--vs-muted); }
+.vs-doc { text-align: right; border-left: 3px solid var(--vs-orange); padding-left: 4mm; }
+.vs-doc-type { font-size: 7.5pt; font-weight: 600; color: var(--vs-orange); text-transform: uppercase; letter-spacing: 1.5pt; }
+.vs-doc-title { font-size: 13pt; font-weight: 800; color: var(--vs-navy); margin: 1mm 0; font-family: "Playfair Display", Georgia, serif; }
+.vs-issue { margin-top: 1.5mm; font-size: 8pt; color: var(--vs-muted); }
+.vs-issue strong { color: var(--vs-ink); font-weight: 700; }
+
+.vs-banner { background: linear-gradient(135deg, #1e3a8a 0%, #15296b 100%); color: #fff; padding: 5mm 6mm; border-radius: 2mm; margin-bottom: 4mm; }
+.vs-banner-label { font-size: 8pt; color: #fb923c; text-transform: uppercase; letter-spacing: 2pt; font-weight: 700; margin-bottom: 1.5mm; }
+.vs-banner-title { font-size: 18pt; font-weight: 900; font-family: "Playfair Display", Georgia, serif; margin-bottom: 1mm; }
+.vs-banner-sub { font-size: 10pt; color: rgba(255, 255, 255, .85); }
+
+.vs-section-title { display: flex; align-items: center; gap: 3mm; margin: 3.5mm 0 2.5mm; }
+.vs-badge { background: var(--vs-orange); color: #fff; font-size: 7.5pt; font-weight: 700; padding: 1.2mm 2.5mm; border-radius: 1mm; letter-spacing: .8pt; text-transform: uppercase; }
+.vs-section-label { font-size: 11pt; font-weight: 700; color: var(--vs-navy); text-transform: uppercase; letter-spacing: .5pt; }
+.vs-section-line { flex: 1; height: 1px; background: var(--vs-line); }
+
+.vs-codes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin: 2mm 0 3mm; }
+.vs-code { background: var(--vs-orange-soft); border-left: 3px solid var(--vs-orange); padding: 2.5mm 3mm; border-radius: 0 1mm 1mm 0; }
+.vs-code-label { font-size: 7pt; color: var(--vs-muted); text-transform: uppercase; letter-spacing: .8pt; font-weight: 600; margin-bottom: .5mm; }
+.vs-code-value { font-size: 11pt; font-weight: 800; color: var(--vs-navy); font-family: "Playfair Display", Georgia, serif; letter-spacing: .8pt; }
+
+.vs-table { width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: 9pt; }
+.vs-table thead th { background: var(--vs-navy); color: #fff; text-align: left; padding: 2.5mm 3mm; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .8pt; }
+.vs-table thead th.center { text-align: center; }
+.vs-table tbody td { padding: 3mm; border-bottom: 1px solid var(--vs-line); vertical-align: middle; }
+.vs-table tbody tr:nth-child(even) td { background: #f8fafc; }
+.vs-table tbody td.center { text-align: center; }
+.vs-flight-no { font-weight: 700; color: var(--vs-navy); font-family: "Playfair Display", Georgia, serif; font-size: 10pt; }
+.vs-route { font-weight: 600; }
+.vs-arrow { color: var(--vs-orange); margin: 0 1.5mm; font-weight: 700; }
+.vs-ticket { font-family: "Courier New", monospace; font-size: 8.5pt; color: var(--vs-navy); font-weight: 600; }
+.vs-seat { display: inline-block; background: var(--vs-orange-soft); color: var(--vs-orange); padding: .5mm 2mm; border-radius: 1mm; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; }
+
+.vs-two { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; margin-top: 2mm; }
+.vs-card { border: 1px solid var(--vs-line); border-radius: 2mm; overflow: hidden; background: #fff; page-break-inside: avoid; }
+.vs-card-head { background: var(--vs-navy); color: #fff; padding: 3mm 3.5mm; display: flex; justify-content: space-between; align-items: center; gap: 3mm; }
+.vs-card-name { font-size: 11pt; font-weight: 700; font-family: "Playfair Display", Georgia, serif; }
+.vs-card-stars { color: #fb923c; font-size: 9pt; }
+.vs-card-body { padding: 2.5mm 3mm; }
+.vs-kv { display: flex; justify-content: space-between; gap: 3mm; padding: .9mm 0; font-size: 8.5pt; border-bottom: 1px dashed var(--vs-line); }
+.vs-kv:last-child { border-bottom: none; }
+.vs-kv-label { color: var(--vs-muted); font-weight: 600; text-transform: uppercase; font-size: 7pt; min-width: 22mm; }
+.vs-kv-value { text-align: right; flex: 1; }
+
+.vs-bag { border: 1px solid var(--vs-line); border-radius: 2mm; padding: 3mm 3.5mm; background: #fff; }
+.vs-bag-title { font-size: 8.5pt; color: var(--vs-navy); font-weight: 700; text-transform: uppercase; letter-spacing: .8pt; margin-bottom: 2mm; display: flex; align-items: center; gap: 2mm; }
+.vs-bag-title::before { content: ""; width: 2.5mm; height: 2.5mm; background: var(--vs-orange); border-radius: 50%; }
+.vs-bag-row { display: flex; justify-content: space-between; padding: 1.2mm 0; border-bottom: 1px dashed var(--vs-line); font-size: 9pt; }
+.vs-bag-row:last-child { border-bottom: none; }
+
+.vs-day { border: 1px solid var(--vs-line); border-radius: 2mm; overflow: hidden; margin-bottom: 3mm; page-break-inside: avoid; }
+.vs-day-head { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 2.5mm 4mm; display: flex; align-items: center; gap: 3mm; border-bottom: 1px solid var(--vs-line); border-left: 4mm solid var(--vs-orange); }
+.vs-day-num { width: 12mm; height: 12mm; border-radius: 50%; background: var(--vs-navy); color: #fff; display: flex; align-items: center; justify-content: center; flex-direction: column; flex-shrink: 0; }
+.vs-day-num small { font-size: 6.5pt; text-transform: uppercase; opacity: .85; line-height: 1; }
+.vs-day-num b { font-size: 13pt; font-weight: 900; line-height: 1; margin-top: .3mm; font-family: "Playfair Display", Georgia, serif; }
+.vs-day-info { flex: 1; }
+.vs-day-date { font-size: 7.5pt; color: var(--vs-muted); text-transform: uppercase; letter-spacing: .8pt; font-weight: 600; margin-bottom: .5mm; }
+.vs-day-title { font-size: 11.5pt; font-weight: 700; color: var(--vs-navy); font-family: "Playfair Display", Georgia, serif; line-height: 1.2; }
+.vs-day-loc { text-align: right; font-size: 8pt; color: var(--vs-muted); }
+.vs-day-loc b { color: var(--vs-orange); display: block; font-size: 9pt; }
+.vs-timeline { padding: 1.5mm 4mm; }
+.vs-tl-item { display: flex; gap: 3.5mm; padding: 1.3mm 0; border-bottom: 1px dashed var(--vs-line); }
+.vs-tl-item:last-child { border-bottom: none; }
+.vs-tl-time { flex-shrink: 0; width: 14mm; font-size: 9pt; font-weight: 700; color: var(--vs-orange); padding-top: .5mm; }
+.vs-tl-content { flex: 1; font-size: 8.5pt; }
+.vs-tl-title { font-weight: 700; display: block; margin-bottom: .3mm; }
+.vs-tl-desc { color: var(--vs-muted); font-size: 8pt; line-height: 1.4; }
+
+.vs-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5mm; margin-top: 3mm; }
+.vs-note { background: #f1f5f9; border-left: 3px solid var(--vs-navy); padding: 2.5mm 3mm; border-radius: 0 1mm 1mm 0; }
+.vs-note.is-accent { border-left-color: var(--vs-orange); background: var(--vs-orange-soft); }
+.vs-note-title { font-size: 7.5pt; color: var(--vs-navy); font-weight: 700; text-transform: uppercase; letter-spacing: .8pt; margin-bottom: 1.2mm; }
+.vs-note.is-accent .vs-note-title { color: var(--vs-orange); }
+.vs-note ul { list-style: none; padding: 0; margin: 0; }
+.vs-note li { padding-left: 3mm; position: relative; margin-bottom: .7mm; font-size: 8pt; line-height: 1.5; }
+.vs-note li::before { content: "▸"; position: absolute; left: 0; color: var(--vs-orange); font-weight: 700; }
+
+.vs-footer { margin-top: 6mm; border-top: 1px solid var(--vs-line); padding-top: 2.5mm; display: flex; justify-content: space-between; gap: 4mm; font-size: 7.5pt; color: var(--vs-muted); }
+.vs-footer b { color: var(--vs-navy); font-size: 8.5pt; }
+
+/* ---------- print ---------- */
+@page { size: A4; margin: 0; }
+body.vs-printing > *:not(.vs-print-root) { display: none !important; }
+body.vs-printing .vs-print-root { display: block !important; position: absolute; inset-block-start: 0; inset-inline-start: 0; }
+body.vs-printing .vs-paper-wrap { background: #fff; border: 0; padding: 0; max-height: none; overflow: visible; }
+body.vs-printing .vs-paper-scale { transform: none !important; }
+body.vs-printing .vs-sheet { box-shadow: none; margin: 0; width: 210mm; }
+
+.vs-print-root { display: none; direction: ltr; }
+.vs-sheet, .vs-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

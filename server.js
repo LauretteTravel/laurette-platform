@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -9,15 +9,16 @@ import { openDb, seedDatabase, loadSeed, one, q } from './lib/db.js';
 import { hashPassword, sessionUser, purgeExpiredSessions } from './lib/auth.js';
 import { CLIENT_COOKIE, clientSessionUser } from './lib/client-auth.js';
 import { emailConfigured, sendClientOtp } from './lib/client-email.js';
-import { HttpError, createRouter, json, html, text, redirect, parseCookies, securityHeaders, clientIp, RateLimiter } from './lib/http.js';
+import { HttpError, createRouter, json, html, text, redirect, parseCookies, securityHeaders, clientIp, RateLimiter, withCompression } from './lib/http.js';
 import { artSvg, ART_KEYS } from './lib/art.js';
 import { ASSET_V, trackingFlags } from './lib/views/layout.js';
 import { homePage, programsPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
-import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage } from './lib/views/public2.js';
+import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
 import * as API from './lib/api.js';
 import * as CLIENT_API from './lib/client-api.js';
 import { COOKIE } from './lib/api.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
+import { localizeHtml, dictionary } from './lib/i18n.js';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC_DIR = join(HERE, 'public');
@@ -35,12 +36,27 @@ const MIME = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  '.woff2': 'font/woff2',
 };
 
 function localAdminPassword() {
   const credentialsFile = join(HERE, 'data', 'admin-credentials.txt');
   if (!existsSync(credentialsFile)) return null;
   return readFileSync(credentialsFile, 'utf8').match(/كلمة المرور المؤقتة:\s*(\S+)/)?.[1] || null;
+}
+
+function ensureAdminPassword() {
+  const file = join(HERE, 'data', 'admin-credentials.txt');
+  const generated = randomBytes(9).toString('base64url');
+  const body = `لوريت — بيانات دخول لوحة الإدارة\nاسم المستخدم: laurette\nكلمة المرور المؤقتة: ${generated}\nغيّرها بعد أول تسجيل دخول.\n`;
+  try {
+    mkdirSync(join(HERE, 'data'), { recursive: true });
+    writeFileSync(file, body, 'utf8');
+    console.warn('[laurette] No ADMIN_PASSWORD found — generated a temporary one in data/admin-credentials.txt');
+  } catch {
+    console.warn('[laurette] No ADMIN_PASSWORD found and could not write data/admin-credentials.txt');
+  }
+  return generated;
 }
 
 export function createApp(options = {}) {
@@ -50,7 +66,7 @@ export function createApp(options = {}) {
   const sendVerificationEmail = options.sendVerificationEmail || sendClientOtp;
   const clientEmailEnabled = Boolean(options.sendVerificationEmail || emailConfigured());
   const seed = options.seed || loadSeed(options.seedFile || join(HERE, 'data', 'seed.json'));
-  const adminPassword = options.adminPassword || process.env.ADMIN_PASSWORD || localAdminPassword();
+  const adminPassword = options.adminPassword || process.env.ADMIN_PASSWORD || localAdminPassword() || ensureAdminPassword();
   const seedResult = seedDatabase(db, seed, hashPassword, adminPassword);
   purgeExpiredSessions(db);
 
@@ -59,18 +75,26 @@ export function createApp(options = {}) {
   const startedAt = Date.now();
 
   /* ---------------- pages ---------------- */
+  const sendHtml = (ctx, status, body, headers = {}) => html(
+    ctx.res,
+    status,
+    ctx.lang === 'en' ? localizeHtml(body, { path: ctx.path, baseUrl, lang: 'en' }) : body,
+    headers,
+  );
+
   const page = (fn, opts = {}) => (ctx) => {
     const body = fn(ctx, ctx.params?.slug);
     if (body === null) {
       const settings = getSettings(db);
-      return html(ctx.res, 404, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
+      return sendHtml(ctx, 404, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
     }
-    return html(ctx.res, 200, body, { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
+    return sendHtml(ctx, 200, body, { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   };
 
   router.get('/', page(homePage));
   router.get('/programs', page(programsPage));
   router.get('/offers', page(offersPage));
+  router.get('/jordan', page(jordanPage));
   router.get('/programs/:slug', page(programPage));
   router.get('/umrah', page(umrahPage));
   router.get('/flights', page(flightsPage));
@@ -191,18 +215,42 @@ export function createApp(options = {}) {
     ctx.res.end(svg);
   });
 
+  router.get('/i18n/en.json', (ctx) => {
+    text(ctx.res, 200, JSON.stringify(dictionary()), 'application/json; charset=utf-8', { 'cache-control': 'public, max-age=300' });
+  });
+
+  /* Public branding used by client-side documents (voucher header/footer). */
+  router.get('/api/settings', (ctx) => {
+    const s = ctx.settings || {};
+    const publicSettings = {
+      brand: s.brand, brandShort: s.brandShort, currency: s.currency,
+      whatsapp: s.whatsapp, branches: s.branches || [], email: s.email,
+    };
+    json(ctx.res, 200, { ok: true, settings: publicSettings }, { 'cache-control': 'public, max-age=600' });
+  });
+
   router.get('/sitemap.xml', (ctx) => {
-    const urls = ['/', '/programs', '/offers', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
+    const urls = ['/', '/programs', '/offers', '/jordan', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
     const programs = q(db, "SELECT slug, updated_at FROM programs WHERE status IN ('published','sold_out')");
     const destinations = q(db, 'SELECT slug FROM destinations WHERE published = 1');
     const articles = q(db, "SELECT slug, updated_at FROM articles WHERE status = 'published'");
-    const entries = [
-      ...urls.map((u) => ({ loc: `${baseUrl}${u}`, priority: u === '/' ? '1.0' : '0.8' })),
-      ...programs.map((p) => ({ loc: `${baseUrl}/programs/${p.slug}`, priority: '0.7', lastmod: String(p.updated_at || '').slice(0, 10) })),
-      ...destinations.map((d) => ({ loc: `${baseUrl}/destinations/${d.slug}`, priority: '0.6' })),
-      ...articles.map((a) => ({ loc: `${baseUrl}/guide/${a.slug}`, priority: '0.6', lastmod: String(a.updated_at || '').slice(0, 10) })),
+    const pages = [
+      ...urls.map((u) => ({ path: u, priority: u === '/' ? '1.0' : '0.8' })),
+      ...programs.map((p) => ({ path: `/programs/${p.slug}`, priority: '0.7', lastmod: String(p.updated_at || '').slice(0, 10) })),
+      ...destinations.map((d) => ({ path: `/destinations/${d.slug}`, priority: '0.6' })),
+      ...articles.map((a) => ({ path: `/guide/${a.slug}`, priority: '0.6', lastmod: String(a.updated_at || '').slice(0, 10) })),
     ];
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map((e) => `  <url><loc>${e.loc}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ''}<priority>${e.priority}</priority></url>`).join('\n')}\n</urlset>`;
+    const alternates = (p) => {
+      const ar = `${baseUrl}${p}`;
+      const en = p === '/' ? `${baseUrl}/en` : `${baseUrl}/en${p}`;
+      return `<xhtml:link rel="alternate" hreflang="ar" href="${ar}"/><xhtml:link rel="alternate" hreflang="en" href="${en}"/><xhtml:link rel="alternate" hreflang="x-default" href="${ar}"/>`;
+    };
+    const entries = pages.flatMap((e) => {
+      const ar = `${baseUrl}${e.path}`;
+      const en = e.path === '/' ? `${baseUrl}/en` : `${baseUrl}/en${e.path}`;
+      return [ar, en].map((loc) => `<url><loc>${loc}</loc>${e.lastmod ? `<lastmod>${e.lastmod}</lastmod>` : ''}<priority>${e.priority}</priority>${alternates(e.path)}</url>`);
+    });
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries.join('\n')}\n</urlset>`;
     text(ctx.res, 200, xml, 'application/xml; charset=utf-8', { 'cache-control': 'public, max-age=3600' });
   });
 
@@ -221,7 +269,11 @@ export function createApp(options = {}) {
       theme_color: '#0B2A43',
       lang: 'ar',
       dir: 'rtl',
-      icons: [{ src: '/art/haram.svg?v=0', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+      icons: [
+        { src: '/media/brand/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/media/brand/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/media/brand/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+      ],
     };
     text(ctx.res, 200, JSON.stringify(manifest), 'application/manifest+json; charset=utf-8');
   });
@@ -240,6 +292,9 @@ export function createApp(options = {}) {
       const ext = extname(file).toLowerCase();
       const isHtml = ext === '.html';
       const revalidate = isHtml || ext === '.js' || ext === '.css';
+      const cacheControl = ext === '.woff2'
+        ? 'public, max-age=31536000, immutable'
+        : (revalidate ? 'no-cache' : 'public, max-age=604800');
       const range = req.headers.range;
       if (range && /^bytes=\d*-\d*$/.test(range)) {
         const [startRaw, endRaw] = range.replace('bytes=', '').split('-');
@@ -255,7 +310,7 @@ export function createApp(options = {}) {
           'content-length': chunk.length,
           'content-range': `bytes ${start}-${end}/${data.length}`,
           'accept-ranges': 'bytes',
-          'cache-control': revalidate ? 'no-cache' : 'public, max-age=604800',
+          'cache-control': cacheControl,
           'x-content-type-options': 'nosniff',
         });
         return res.end(req.method === 'HEAD' ? undefined : chunk);
@@ -264,7 +319,7 @@ export function createApp(options = {}) {
         'content-type': MIME[ext] || 'application/octet-stream',
         'content-length': data.length,
         'accept-ranges': 'bytes',
-        'cache-control': revalidate ? 'no-cache' : 'public, max-age=604800',
+        'cache-control': cacheControl,
         'x-content-type-options': 'nosniff',
       });
       res.end(req.method === 'HEAD' ? undefined : data);
@@ -275,10 +330,20 @@ export function createApp(options = {}) {
   }
 
   async function handle(req, res) {
+    withCompression(req, res);
     const started = Date.now();
     const url = new URL(req.url, baseUrl);
-    const pathname = url.pathname;
+    let pathname = url.pathname;
+    let lang = 'ar';
+    if (pathname === '/en' || pathname.startsWith('/en/')) {
+      lang = 'en';
+      pathname = pathname.slice(3) || '/';
+    } else if (pathname === '/ar' || pathname.startsWith('/ar/')) {
+      const rest = pathname.slice(3) || '/';
+      return redirect(res, rest + (url.search || ''), 301);
+    }
     const nonce = randomBytes(16).toString('base64');
+    res.lang = lang;
     const secure = req.headers['x-forwarded-proto'] === 'https' || baseUrl.startsWith('https://');
     const cookies = parseCookies(req);
     const token = cookies[COOKIE] || null;
@@ -288,7 +353,7 @@ export function createApp(options = {}) {
     const settings = getSettings(db);
     const tracking = trackingFlags(settings);
     const ctx = {
-      req, res, db, params: {}, query: Object.fromEntries(url.searchParams.entries()),
+      req, res, db, params: {}, query: Object.fromEntries(url.searchParams.entries()), lang, path: pathname,
       user, token, clientUser, clientToken, nonce, baseUrl, secure, ip: clientIp(req),
       settings, tracking,
     };
@@ -307,7 +372,7 @@ export function createApp(options = {}) {
     }
 
     if (pathname.length > 1 && pathname.endsWith('/')) {
-      return redirect(res, pathname.replace(/\/+$/, '') + (url.search || ''), 301);
+      return redirect(res, (lang === 'en' ? '/en' + pathname.replace(/\/+$/, '') : pathname.replace(/\/+$/, '')) + (url.search || ''), 301);
     }
 
     if (pathname.startsWith('/api/')) {
@@ -336,7 +401,7 @@ export function createApp(options = {}) {
     const match = router.match('GET', pathname);
     if (!match) {
       const settings = getSettings(db);
-      return html(res, 404, offlinePage({ settings, nonce, baseUrl }), { ...securityHeaders(nonce, secure, tracking) });
+      return sendHtml(ctx, 404, offlinePage({ settings, nonce, baseUrl }), { ...securityHeaders(nonce, secure, tracking) });
     }
     ctx.params = match.params;
     try {
@@ -361,7 +426,7 @@ export function createApp(options = {}) {
       });
     }
     const settings = getSettings(db);
-    return html(ctx.res, err.status || 500, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
+    return sendHtml(ctx, err.status || 500, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   }
 
   const server = http.createServer((req, res) => {
@@ -406,8 +471,11 @@ function adminShell(ctx) {
 <title>لوحة إدارة لوريت</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="preload" href="/assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/fonts/cairo.css?v=1">
 <link rel="stylesheet" href="/assets/css/app.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/voucher.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/voucher-studio.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -416,6 +484,8 @@ function adminShell(ctx) {
 </main>
 <noscript><p style="padding:24px">تحتاج إلى تفعيل JavaScript لاستخدام لوحة الإدارة.</p></noscript>
 <script src="/assets/js/admin.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/voucher-generator.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/voucher-studio.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }

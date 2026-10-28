@@ -309,10 +309,148 @@ for (const c of content2.COUNTRIES || []) {
   }
 }
 
-const articles = (pack.articles || []).map((a) => ({
-  slug: a.slug, title: a.title, excerpt: a.excerpt, body: a.body, category: a.category || 'دليل السفر',
-  tags: a.tags || [], readingMinutes: a.readingMinutes || 4, publishedAt: a.updatedAt || '2026-10-23', updatedAt: a.updatedAt || '2026-10-23',
-}));
+const hotelGuides = [
+  { city: 'مكة المكرمة', citySlug: 'mecca', name: 'سويس أوتيل المقام', stars: 5, area: 'أبراج مكة – قريب من الحرم', note: 'من أشهر فنادق مكة المطلة على المسجد الحرام، ويصلح لمن يريد أقرب مسافة للحرم.', source: 'المسافر', sort: 10 },
+  { city: 'مكة المكرمة', citySlug: 'mecca', name: 'برج ساعة مكة الملكي فيرمونت', stars: 5, area: 'برج الساعة', note: 'إطلالة مباشرة على الحرم ودخول من ساحة الملك عبدالعزيز.', source: 'المسافر', sort: 20 },
+  { city: 'مكة المكرمة', citySlug: 'mecca', name: 'فوكو مكة (Voco)', stars: 5, area: 'قريب من الحرم', note: 'خيار خمس نجوم ضمن مجموعة IHG، مناسب للعرسان والعائلات.', source: 'المسافر', sort: 30 },
+  { city: 'المدينة المنورة', citySlug: 'medina', name: 'أنوار المدينة موفنبيك', stars: 5, area: 'المنطقة المركزية', note: 'قريب من المسجد النبوي، ويُعد من الخيارات المعروفة للزوار.', source: 'المسافر', sort: 40 },
+  { city: 'المدينة المنورة', citySlug: 'medina', name: 'سوفيتل شهد المدينة', stars: 5, area: 'المنطقة المركزية', note: 'فندق فاخر قريب من الحرم النبوي مع خدمات عائلية.', source: 'المسافر', sort: 50 },
+  { city: 'إسطنبول', citySlug: 'istanbul', name: 'هيلتون إسطنبول بومونتي', stars: 5, area: 'شيشلي', note: 'قريب من مراكز التسوق والمطاعم، وخيار عملي للعائلات.', source: 'المسافر', sort: 60 },
+  { city: 'دبي', citySlug: 'dubai', name: 'هايد دبي', stars: 5, area: 'داون تاون', note: 'إطلالة على برج خليفة وقرب من دبي مول.', source: 'المسافر', sort: 70 },
+  { city: 'أبوظبي', citySlug: 'abu-dhabi', name: 'هيلتون أبوظبي جزيرة ياس', stars: 5, area: 'جزيرة ياس', note: 'قريب من المتنزهات والمراكز الترفيهية ومطار أبوظبي.', source: 'المسافر', sort: 80 },
+  { city: 'الدوحة', citySlug: 'doha', name: 'فيرمونت الدوحة', stars: 5, area: 'الخليج الغربي', note: 'أبراج مميزة وإطلالة بحرية، مناسب للتوقف والزيارات القصيرة.', source: 'المسافر', sort: 90 },
+  { city: 'المنامة', citySlug: 'manama', name: 'ويندام جاردن المنامة', stars: 4, area: 'الجفير', note: 'خيار عملي قريب من المراكز التجارية والمطاعم.', source: 'المسافر', sort: 100 },
+  { city: 'لندن', citySlug: 'london', name: 'ذا بيلتمور مايفير', stars: 5, area: 'مايفير', note: 'فندق كلاسيكي في قلب مايفير، قريب من هايد بارك وأكسفورد ستريت.', source: 'المسافر', sort: 110 },
+  { city: 'باريس', citySlug: 'paris', name: 'لا كليه شنزليزيه باري باي ذا كريست كوليكشن', stars: 5, area: 'الشانزليزيه', note: 'قريب من الشانزليزيه وقوس النصر، مناسب لرحلات المدن.', source: 'المسافر', sort: 120 },
+  { city: 'بانكوك', citySlug: 'bangkok', name: 'ميلينيوم هيلتون بانكوك', stars: 5, area: 'سوكومفيت', note: 'قريب من المترو والأسواق، وخيار جيد لرحلات العائلات.', source: 'المسافر', sort: 130 },
+  { city: 'بوكيت', citySlug: 'phuket', name: 'منتجع أماري بوكيت', stars: 5, area: 'شاطئ باتونج', note: 'منتجع على الواجهة البحرية مع إطلالة على البحر.', source: 'المسافر', sort: 140 },
+  { city: 'الرياض', citySlug: 'riyadh', name: 'موفنبيك الرياض وريزيدنسز', stars: 5, area: 'وسط الرياض', note: 'خيار للزيارات العملية والقريبة من المراكز التجارية.', source: 'المسافر', sort: 150 },
+  { city: 'جدة', citySlug: 'jeddah', name: 'هيلتون جدة', stars: 5, area: 'الكورنيش', note: 'قريب من كورنيش جدة ومنطقة البلد التاريخية.', source: 'المسافر', sort: 160 },
+];
+
+const airlineGuides = [
+  { name: 'الملكية الأردنية', code: 'RJ', hub: 'عمّان (AMM)', note: 'الناقل الوطني الأردني ومحوره مطار الملكة علياء، ويغطي وجهات عربية وأوروبية وآسيوية.', sort: 10 },
+  { name: 'الخطوط التركية', code: 'TK', hub: 'إسطنبول (IST)', note: 'شبكة واسعة عبر إسطنبول، وخيار شائع للسفر إلى تركيا وأوروبا وآسيا.', sort: 20 },
+  { name: 'طيران الإمارات', code: 'EK', hub: 'دبي (DXB)', note: 'محور دبي يربط الأردن بوجهات آسيا وأفريقيا وأوروبا.', sort: 30 },
+  { name: 'الخطوط الجوية القطرية', code: 'QR', hub: 'الدوحة (DOH)', note: 'محور الدوحة، ويُستخدم كثيرًا للسفر إلى شرق آسيا وأوروبا.', sort: 40 },
+  { name: 'الاتحاد للطيران', code: 'EY', hub: 'أبوظبي (AUH)', note: 'محور أبوظبي مع شبكة وجهات دولية واسعة.', sort: 50 },
+  { name: 'فلاي دبي', code: 'FZ', hub: 'دبي (DXB)', note: 'ناقل اقتصادي من دبي، مناسب للرحلات القصيرة والترانزيت.', sort: 60 },
+  { name: 'طيران بيجاسوس', code: 'PC', hub: 'إسطنبول (SAW)', note: 'ناقل اقتصادي تركي، خيار شائع لرحلات تركيا وأوروبا.', sort: 70 },
+  { name: 'الخطوط السعودية', code: 'SV', hub: 'جدة (JED) والرياض (RUH)', note: 'مناسبة للعمرة والزيارة والوجهات السعودية.', sort: 80 },
+  { name: 'طيران ناس', code: 'XY', hub: 'الرياض (RUH) وجدة (JED)', note: 'ناقل سعودي اقتصادي يخدم وجهات إقليمية.', sort: 90 },
+  { name: 'مصر للطيران', code: 'MS', hub: 'القاهرة (CAI)', note: 'خيار مباشر إلى مصر ووجهات أفريقية.', sort: 100 },
+  { name: 'الأردنية للطيران', code: 'R5', hub: 'عمّان (AMM)', note: 'ناقل أردني يخدم وجهات إقليمية وعمرة.', sort: 110 },
+  { name: 'طيران الخليج', code: 'GF', hub: 'المنامة (BAH)', note: 'محور المنامة، خيار للمسافرين إلى الخليج.', sort: 120 },
+];
+
+const tripIdeas = [
+  {
+    slug: 'istanbul-5', title: 'إسطنبول — 5 أيام / 4 ليالٍ', city: 'إسطنبول', country: 'تركيا', days: 5, nights: 4,
+    bestTime: 'الربيع (أبريل–يونيو) والخريف (سبتمبر–نوفمبر)',
+    summary: 'برنامج مدن متوازن يجمع السلطان أحمد والبازار والبيرة، مع وقت للعائلة والتسوق.',
+    itinerary: ['الوصول والاستقبال والتوجه إلى الفندق', 'السلطان أحمد: آيا صوفيا والمسجد الأزرق والبازار الكبير', 'جولة البوسفور ورحلة بالقارب', 'يوم حر للتسوق أو زيارة أورتاكوي', 'التوديع والعودة'],
+    includes: ['تذاكر الطيران', 'الإقامة مع الإفطار', 'الاستقبال والتوديع', 'جولات المدينة', 'تنقلات المطار'],
+    imageUrl: '/media/hero/dest-istanbul.jpg', sort: 10,
+  },
+  {
+    slug: 'dubai-4', title: 'دبي — 4 أيام / 3 ليالٍ', city: 'دبي', country: 'الإمارات', days: 4, nights: 3,
+    bestTime: 'نوفمبر–مارس',
+    summary: 'إقامة قصيرة تجمع داون تاون والمارينا والرحلات الصحراوية.',
+    itinerary: ['الوصول والاستقبال', 'برج خليفة ودبي مول', 'جولة المارينا والبحر', 'التوديع والعودة'],
+    includes: ['تذاكر الطيران', 'الإقامة', 'الاستقبال والتوديع', 'تنقلات المطار', 'جولة المدينة'],
+    imageUrl: '/media/hero/hero-poster.jpg', sort: 20,
+  },
+  {
+    slug: 'cairo-4', title: 'القاهرة — 4 أيام / 3 ليالٍ', city: 'القاهرة', country: 'مصر', days: 4, nights: 3,
+    bestTime: 'أكتوبر–أبريل',
+    summary: 'زيارة الأهرامات والمتحف المصري والسوق القديم مع إقامة مريحة.',
+    itinerary: ['الوصول والاستقبال', 'الأهرامات وأبو الهول', 'المتحف المصري ووسط البلد', 'التوديع والعودة'],
+    includes: ['تذاكر الطيران', 'الإقامة مع الإفطار', 'الاستقبال والتوديع', 'جولات يومية'],
+    imageUrl: '/media/hero/dest-egypt.jpg', sort: 30,
+  },
+  {
+    slug: 'georgia-8', title: 'تبليسي وباتومي — 8 أيام / 7 ليالٍ', city: 'تبليسي وباتومي', country: 'جورجيا', days: 8, nights: 7,
+    bestTime: 'مايو–يونيو وسبتمبر–أكتوبر',
+    summary: 'برنامج طبيعة ومدن يجمع تبليسي التاريخية وبحر باتومي.',
+    itinerary: ['الوصول إلى تبليسي', 'جولة المدينة والقلعة', 'الانتقال إلى باتومي', 'أيام البحر والبوليفارد', 'العودة إلى تبليسي والتوديع'],
+    includes: ['تذاكر الطيران', 'الإقامة', 'الاستقبال والتوديع', 'تنقلات بين المدن', 'جولات سياحية'],
+    imageUrl: '/media/hero/dest-georgia.jpg', sort: 40,
+  },
+  {
+    slug: 'trabzon-6', title: 'طرابزون — 6 أيام / 5 ليالٍ', city: 'طرابزون', country: 'تركيا', days: 6, nights: 5,
+    bestTime: 'مايو–سبتمبر',
+    summary: 'طبيعة البحر الأسود والبحيرات والمرتفعات، مناسب للعائلات.',
+    itinerary: ['الوصول والاستقبال', 'جولة المدينة والميناء', 'أوزنجول والبحيرة', 'مرتفعات السلطان مراد', 'يوم حر', 'التوديع'],
+    includes: ['تذاكر الطيران', 'الإقامة مع الإفطار', 'الاستقبال والتوديع', 'تنقلات', 'جولات يومية'],
+    imageUrl: null, sort: 50,
+  },
+  {
+    slug: 'umrah-8', title: 'عمرة مكة والمدينة — 8 أيام / 7 ليالٍ', city: 'مكة المكرمة والمدينة المنورة', country: 'السعودية', days: 8, nights: 7,
+    bestTime: 'مدار العام مع تجنب الذروة',
+    summary: 'برنامج عمرة يجمع مكة والمدينة مع فنادق قريبة من الحرمين.',
+    itinerary: ['الوصول إلى المدينة المنورة', 'زيارة المسجد النبوي', 'الانتقال إلى مكة المكرمة', 'أداء العمرة', 'أيام مكة والتوديع'],
+    includes: ['تذاكر الطيران', 'تأشيرة العمرة', 'الإقامة', 'الاستقبال والتوديع', 'النقل بين المدن'],
+    imageUrl: '/media/hero/dest-makkah.jpg', sort: 60,
+  },
+  {
+    slug: 'bangkok-10', title: 'بانكوك وبوكيت — 10 أيام / 9 ليالٍ', city: 'بانكوك وبوكيت', country: 'تايلاند', days: 10, nights: 9,
+    bestTime: 'نوفمبر–فبراير',
+    summary: 'مدينة نابضة ثم استرخاء على الشاطئ، مع رحلات داخلية.',
+    itinerary: ['الوصول إلى بانكوك', 'جولات المعابد والأسواق', 'الطيران إلى بوكيت', 'أيام الشاطئ والجزر', 'العودة والتوديع'],
+    includes: ['تذاكر الطيران الدولية والداخلية', 'الإقامة', 'الاستقبال والتوديع', 'بعض الجولات'],
+    imageUrl: null, sort: 70,
+  },
+  {
+    slug: 'london-7', title: 'لندن — 7 أيام / 6 ليالٍ', city: 'لندن', country: 'بريطانيا', days: 7, nights: 6,
+    bestTime: 'مايو–سبتمبر',
+    summary: 'رحلة مدن وثقافة مع وقت للتسوق والزيارات العائلية.',
+    itinerary: ['الوصول', 'وسط لندن: بيغ بن والبرلمان', 'المتاحف', 'يوم للتسوق', 'رحلة خارجية اختيارية', 'التوديع'],
+    includes: ['تذاكر الطيران', 'الإقامة', 'الاستقبال', 'بطاقة النقل المحلي', 'بعض الجولات'],
+    imageUrl: null, sort: 80,
+  },
+  {
+    slug: 'sharm-4', title: 'شرم الشيخ — 4 أيام / 3 ليالٍ', city: 'شرم الشيخ', country: 'مصر', days: 4, nights: 3,
+    bestTime: 'سبتمبر–مايو',
+    summary: 'بحر وشعاب مرجانية وإقامة شاملة، مثالي لعطلة قصيرة.',
+    itinerary: ['الوصول والاستقبال', 'يوم شاطئ وغطس', 'رحلة سفاري أو راس محمد', 'التوديع'],
+    includes: ['تذاكر الطيران', 'الإقامة الشاملة', 'الاستقبال والتوديع', 'تنقلات المطار'],
+    imageUrl: '/media/hero/dest-sharm.jpg', sort: 90,
+  },
+  {
+    slug: 'antalya-7', title: 'أنطاليا — 7 أيام / 6 ليالٍ', city: 'أنطاليا', country: 'تركيا', days: 7, nights: 6,
+    bestTime: 'يونيو–سبتمبر',
+    summary: 'شواطئ ومنتجعات عائلية مع البلدة القديمة والشلالات.',
+    itinerary: ['الوصول', 'البلدة القديمة والميناء', 'شلالات دودن', 'أيام المنتجع', 'التوديع'],
+    includes: ['تذاكر الطيران', 'الإقامة', 'الاستقبال والتوديع', 'تنقلات المطار'],
+    imageUrl: null, sort: 100,
+  },
+];
+
+const EXTRA_DESTINATIONS = [
+  { slug: 'dubai', name: 'دبي', kind: 'city', summary: 'مدينة الخليج الأكثر تنوعًا: أبراج وشواطئ وأسواق، وجهة قريبة من عمّان برحلات مباشرة عادة.', highlights: ['برج خليفة ودبي مول', 'المارينا والرحلات البحرية', 'الرحلات الصحراوية'], bestTime: 'نوفمبر–مارس', artKey: 'gulf', imageUrl: null, sort: 900 },
+  { slug: 'abu-dhabi', name: 'أبوظبي', kind: 'city', summary: 'عاصمة الإمارات: جامع الشيخ زايد وجزيرة ياس والمتاحف.', highlights: ['جامع الشيخ زايد', 'جزيرة ياس', 'كورنيش أبوظبي'], bestTime: 'نوفمبر–مارس', artKey: 'gulf', imageUrl: null, sort: 905 },
+  { slug: 'doha', name: 'الدوحة', kind: 'city', summary: 'وجهة خليجية قريبة تجمع السوق القديم والكورنيش والمتاحف.', highlights: ['سوق واقف', 'متحف الفن الإسلامي', 'الخليج الغربي'], bestTime: 'نوفمبر–مارس', artKey: 'gulf', imageUrl: null, sort: 910 },
+  { slug: 'tbilisi', name: 'تبليسي', kind: 'city', summary: 'عاصمة جورجيا: بلدة قديمة وحمامات كبريتية ومطاعم ومقاهٍ.', highlights: ['البلدة القديمة', 'قلعة ناريكالا', 'جسر السلام'], bestTime: 'مايو–يونيو وسبتمبر–أكتوبر', artKey: 'europe', imageUrl: '/media/hero/dest-georgia.jpg', sort: 915 },
+  { slug: 'batumi', name: 'باتومي', kind: 'city', summary: 'مدينة ساحلية على البحر الأسود ببوليفارد طويل وأبراج حديثة.', highlights: ['بوليفارد باتومي', 'عجلة فيريس', 'الشاطئ'], bestTime: 'مايو–سبتمبر', artKey: 'beach', imageUrl: '/media/hero/dest-georgia.jpg', sort: 920 },
+  { slug: 'kuala-lumpur', name: 'كوالالمبور', kind: 'city', summary: 'بوابة ماليزيا: أبراج بتروناس وأسواق وطبيعة قريبة.', highlights: ['أبراج بتروناس', 'كهوف باتو', 'حدائق البرجين'], bestTime: 'مايو–يوليو وديسمبر–فبراير', artKey: 'asia', imageUrl: null, sort: 925 },
+  { slug: 'bangkok', name: 'بانكوك', kind: 'city', summary: 'مدينة نابضة بالمعابد والأسواق والطعام، ومنها إلى الجزر.', highlights: ['القصر الكبير', 'وات أرون', 'أسواق الليل'], bestTime: 'نوفمبر–فبراير', artKey: 'asia', imageUrl: null, sort: 930 },
+  { slug: 'phuket', name: 'بوكيت', kind: 'city', summary: 'جزيرة تايلاندية بشواطئ رملية وجولات بحرية.', highlights: ['شاطئ باتونج', 'خليج فانغ نغا', 'جزر فاي فاي'], bestTime: 'نوفمبر–فبراير', artKey: 'beach', imageUrl: null, sort: 935 },
+  { slug: 'london', name: 'لندن', kind: 'city', summary: 'وجهة مدن للتسوق والمتاحف والمسرح، مناسبة للعائلات.', highlights: ['بيغ بن', 'المتحف البريطاني', 'أكسفورد ستريت'], bestTime: 'مايو–سبتمبر', artKey: 'europe', imageUrl: null, sort: 940 },
+  { slug: 'paris', name: 'باريس', kind: 'city', summary: 'مدينة الفن والموضة والمقاهي، مع معالم قريبة وسهلة التنقل.', highlights: ['برج إيفل', 'الشانزليزيه', 'متحف اللوفر'], bestTime: 'أبريل–يونيو وسبتمبر–أكتوبر', artKey: 'europe', imageUrl: null, sort: 945 },
+  { slug: 'trabzon', name: 'طرابزون', kind: 'city', summary: 'بوابة البحر الأسود: بحيرات ومرتفعات وطبيعة خضراء.', highlights: ['أوزنجول', 'بحيرة سيرا', 'مرتفعات السلطان مراد'], bestTime: 'مايو–سبتمبر', artKey: 'europe', imageUrl: null, sort: 950 },
+  { slug: 'antalya', name: 'أنطاليا', kind: 'city', summary: 'منتجعات وشواطئ على المتوسط مع بلدة قديمة وميناء.', highlights: ['كاليتشي', 'شلالات دودن', 'شواطئ كونيالتي'], bestTime: 'يونيو–سبتمبر', artKey: 'beach', imageUrl: null, sort: 955 },
+];
+
+const existingSlugs = new Set(destinations.map((d) => d.slug));
+for (const d of EXTRA_DESTINATIONS) {
+  if (existingSlugs.has(d.slug)) continue;
+  destinations.push({
+    ...d,
+    parentSlug: null,
+    mapUrl: null,
+    published: true,
+  });
+}
 
 const faq = (pack.faq || []).map((f, i) => ({ question: f.q, answer: f.a, category: f.category || 'general', sort: (i + 1) * 10 }));
 
@@ -375,11 +513,18 @@ const adminUser = {
   department: 'الإدارة',
   mustChange: true,
 };
-adminUser['pass' + 'word'] = adminPassword;
 const users = [adminUser];
+// Never write credentials into the seed file (the repo is public).
+// The server hashes ADMIN_PASSWORD / data/admin-credentials.txt at first run.
+delete adminUser['pass' + 'word'];
+
+const articles = (pack.articles || []).map((a) => ({
+  slug: a.slug, title: a.title, excerpt: a.excerpt, body: a.body, category: a.category || 'دليل السفر',
+  tags: a.tags || [], readingMinutes: a.readingMinutes || 4, publishedAt: a.updatedAt || '2026-10-23', updatedAt: a.updatedAt || '2026-10-23',
+}));
 
 const seed = {
-  version: '5',
+  version: '6',
   settings,
   users,
   programs,
@@ -387,6 +532,9 @@ const seed = {
   news,
   reviews,
   destinations,
+  hotelGuides,
+  airlineGuides,
+  tripIdeas,
   articles,
   faq,
   visaRules,

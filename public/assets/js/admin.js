@@ -52,8 +52,10 @@
   function renderLogin(message = '') {
     root.innerHTML = `<div class="login-wrap">
       <form class="login-card" id="loginForm" autocomplete="on">
-        <div class="brand" style="margin-bottom:18px"><span class="brand-mark">ل</span>
-          <span class="brand-text"><b>لوريت</b><span>لوحة الإدارة</span></span></div>
+        <div class="brand" style="margin-bottom:16px">
+          <img class="brand-logo" src="/media/brand/logo.png" alt="لوريت للسياحة والسفر" width="380" height="156">
+        </div>
+        <p class="login-eyebrow">لوحة الإدارة</p>
         <h1>تسجيل الدخول</h1>
         <p class="muted" style="font-size:13px">للوصول إلى الطلبات والعملاء والبرامج. المحاولات محدودة لحماية الحساب.</p>
         <div class="field"><label for="lu">اسم المستخدم</label><input id="lu" name="username" autocomplete="username" dir="ltr" required></div>
@@ -83,6 +85,7 @@
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
     { id: 'requests', label: 'الطلبات', icon: '✉', permission: 'requests:read' },
+    { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
     { id: 'programs', label: 'البرامج', icon: '✈', permission: 'programs:read' },
@@ -99,7 +102,7 @@
   function visibleSections() {
     const role = state.user?.role;
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -157,10 +160,22 @@
     const map = {
       overview: renderOverview, requests: renderRequests, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
+      voucher: renderVoucher,
       users: renderUsers, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
       reports: renderReports, marketing: renderMarketing,
     };
     (map[state.section] || renderOverview)();
+  }
+
+  /* ---------------- manual voucher (standalone) ---------------- */
+  async function renderVoucher() {
+    const view = $('#view');
+    if (!window.VoucherStudio) {
+      view.innerHTML = '<div class="admin-card"><div class="admin-card-body">تعذّر تحميل أداة القسيمة. أعد تحميل الصفحة.</div></div>';
+      return;
+    }
+    view.innerHTML = '';
+    await window.VoucherStudio.mount(view);
   }
 
   /* ---------------- overview ---------------- */
@@ -267,6 +282,12 @@
     preferredTime: 'وقت التواصل', name: 'الاسم', phone: 'الهاتف', email: 'البريد', city: 'المدينة', notes: 'ملاحظات', consent: 'الموافقة', hash: 'بصمة الطلب',
   };
 
+  const TYPE_LABELS = { flight: 'تذكرة طيران', hotel: 'حجز فندق', program: 'برنامج سياحي', umrah: 'عمرة', visa: 'تأشيرة', consult: 'استشارة' };
+  const STATUS_LABELS = {
+    new: 'جديد', reviewing: 'قيد المراجعة', quoted: 'تم إرسال العرض', awaiting: 'في انتظار إعادة الاتصال',
+    in_progress: 'قيد المتابعة', confirmed: 'تم التأكيد', cancelled: 'ملغي',
+  };
+
   async function openRequest(id) {
     const data = await api(`/api/admin/requests/${id}`);
     const r = data.request;
@@ -299,7 +320,7 @@
       <hr>
       <h3>تحديث الحالة</h3>
       <div class="form-grid">
-        <div class="field"><label>الحالة التالية</label>
+        <div class="field"><label>الحالة الجديدة</label>
           <select id="dStatus">${data.nextStatuses.map((s) => `<option value="${s}">${esc(statuses[s]?.label || s)}</option>`).join('') || '<option value="">لا يوجد انتقال متاح</option>'}</select>
         </div>
         <div class="field"><label>إسناد إلى</label>
@@ -316,12 +337,16 @@
       <hr>
       <h3>السجل</h3>
       <ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.message || e.kind)}</b><span>${esc(e.actor_name || 'النظام')} · ${dt(e.created_at)}</span></li>`).join('')}</ul>
+      <div class="btn-row mt-2"><button class="btn btn-gold btn-sm" type="button" data-voucher-admin>قسيمة الحجز</button></div>
       ${payload.phone ? `<div class="btn-row mt-3"><a class="btn btn-wa btn-sm" href="https://wa.me/${String(payload.phone).replace(/\D/g, '')}" target="_blank" rel="noopener">واتساب العميل</a><a class="btn btn-ghost btn-sm" href="tel:${esc(payload.phone)}">اتصال</a></div>` : ''}
     `);
 
     const refresh = () => { closeDrawer(); openRequest(id); };
-    $('[data-save-status]')?.addEventListener('click', async () => {
-      const status = $('#dStatus').value;
+    $('[data-voucher-admin]')?.addEventListener('click', () => {
+      if (!window.VoucherGenerator) { toast('وحدة القسيمة لم تُحمّل. أعد تحميل الصفحة.', 'bad'); return; }
+      window.VoucherGenerator.open({ request: { ...r, typeLabel: data.types?.[r.type]?.label || r.type, statusLabel: statuses[r.status]?.label || r.status }, lang: 'ar' });
+    });
+    $('[data-save-status]')?.addEventListener('click', async () => {      const status = $('#dStatus').value;
       if (!status) return;
       try { await api(`/api/admin/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }); toast('تم تحديث الحالة'); refresh(); } catch (e) { toast(e.message, 'bad'); }
     });
@@ -372,7 +397,7 @@
       <button class="btn btn-primary btn-sm mt-2" data-save-customer>حفظ</button>
       <hr><h3>الطلبات</h3>
       <table class="admin-table"><thead><tr><th>المرجع</th><th>النوع</th><th>الحالة</th><th>الملخص</th></tr></thead>
-      <tbody>${data.requests.map((r) => `<tr data-request="${r.id}"><td class="ref">${esc(r.reference)}</td><td>${esc(r.type)}</td><td>${esc(r.status)}</td><td>${esc(r.summary || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا طلبات</td></tr>'}</tbody></table>
+      <tbody>${data.requests.map((r) => `<tr data-request="${r.id}"><td class="ref">${esc(r.reference)}</td><td>${esc(TYPE_LABELS[r.type] || r.type)}</td><td>${esc(STATUS_LABELS[r.status] || r.status)}</td><td>${esc(r.summary || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا طلبات</td></tr>'}</tbody></table>
     `);
     $('[data-save-customer]')?.addEventListener('click', async () => {
       try {
@@ -541,6 +566,7 @@
     reviews: {
       label: 'المراجعات', titleKey: 'name', fields: [
         { key: 'name', label: 'الاسم' }, { key: 'branch', label: 'الفرع' },
+        { key: 'rating', label: 'التقييم', type: 'select', options: [['5', '★★★★★'], ['4', '★★★★'], ['3', '★★★'], ['2', '★★'], ['1', '★']] },
         { key: 'text', label: 'نص المراجعة', type: 'textarea', rows: 4, full: true },
         { key: 'source', label: 'المصدر' }, { key: 'publishedAt', label: 'التاريخ', type: 'date' },
       ], toggle: ['visible', 'ظاهرة'],
@@ -573,7 +599,10 @@
         <tbody>${data.items.map((it) => {
           const spec = CONTENT[current];
           const title = it[spec.titleKey] || it.title || it.name || it.question || '—';
-          const extra = [it.valid_until ? `حتى ${it.valid_until}` : '', it.published_at || '', it.category || '', it.branch || '', it.last_verified || ''].filter(Boolean).join(' · ');
+          const extra = [
+            current === 'reviews' && it.rating ? '★'.repeat(Math.max(0, Math.min(5, Number(it.rating)))) : '',
+            it.valid_until ? `حتى ${it.valid_until}` : '', it.published_at || '', it.category || '', it.branch || '', it.last_verified || '',
+          ].filter(Boolean).join(' · ');
           const status = spec.toggle ? (it[spec.toggle[0]] ? spec.toggle[1] : 'معطّل') : (it.status || (it.published ? 'منشور' : 'مسودة'));
           return `<tr><td><b>${esc(title)}</b></td><td class="muted">${esc(extra)}</td><td>${esc(status)}</td>
             <td class="btn-row"><button class="btn btn-ghost btn-sm" data-edit-content="${it.id}">تعديل</button><button class="btn btn-danger btn-sm" data-del-content="${it.id}">حذف</button></td></tr>`;
@@ -937,6 +966,7 @@
       const me = await api('/api/auth/me');
       if (!me.user) return renderLogin();
       state.user = me.user;
+      if (location.pathname.replace(/\/+$/, '') === '/admin/voucher') state.section = 'voucher';
       renderShell();
     } catch {
       renderLogin('تعذر الاتصال بالخادم.');

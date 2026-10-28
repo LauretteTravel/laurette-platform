@@ -1,0 +1,133 @@
+/* ============================================================
+   Laurette — booking voucher (A4 print sheet + modal chrome)
+   Loaded on public pages and in the staff area.
+   ============================================================ */
+
+.voucher-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 24, 38, .72);
+  backdrop-filter: blur(2px);
+  overflow: auto;
+  padding: 24px 16px 40px;
+}
+
+.voucher-toolbar {
+  width: min(210mm, 100%);
+  margin: 0 auto 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  background: #fff;
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: 0 12px 30px rgba(4, 20, 32, .28);
+}
+
+.voucher-toolbar .spacer { flex: 1; }
+.voucher-toolbar .voucher-lang { display: inline-flex; border: 1px solid var(--line, #dfe6ec); border-radius: 10px; overflow: hidden; }
+.voucher-toolbar .voucher-lang button {
+  border: 0; background: #fff; padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--navy, #0B2A43); cursor: pointer;
+}
+.voucher-toolbar .voucher-lang button.is-active { background: var(--gold-soft, #FBF1D8); color: var(--navy, #0B2A43); }
+.voucher-toolbar .voucher-note { font-size: 11px; color: #7b8794; }
+
+.voucher-stage { display: flex; justify-content: center; }
+
+/* ---------- the sheet ---------- */
+.voucher-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  box-sizing: border-box;
+  padding: 14mm 14mm 12mm;
+  background: #fff;
+  color: #0B2A43;
+  font-family: Cairo, "Segoe UI", Tahoma, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.65;
+  box-shadow: 0 20px 50px rgba(3, 18, 30, .35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.voucher-sheet[dir="rtl"] { direction: rtl; text-align: right; }
+.voucher-sheet[dir="ltr"] { direction: ltr; text-align: left; }
+
+.voucher-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #0B2A43; }
+.voucher-brand { display: flex; align-items: center; gap: 10px; }
+.voucher-brand-mark {
+  width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
+  background: linear-gradient(140deg, #0B2A43, #17638F); color: #F2C879; font-weight: 800; font-size: 22px;
+}
+.voucher-brand b { display: block; font-size: 17px; letter-spacing: -.2px; }
+.voucher-brand > div > span { display: block; font-size: 9.5px; color: #6b7a88; letter-spacing: .3px; }
+.voucher-doc { text-align: end; }
+.voucher-doc h1 { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: -.3px; }
+.voucher-doc .en { display: block; font-size: 10.5px; color: #6b7a88; letter-spacing: .16em; text-transform: uppercase; margin-top: 2px; }
+.voucher-ref {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 8px;
+  border: 1px solid #E3C27E; background: #FBF1D8; border-radius: 999px; padding: 4px 10px;
+  font-family: "Courier New", monospace; font-size: 11px; font-weight: 700; direction: ltr;
+}
+
+.voucher-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; margin-top: 14px; }
+.voucher-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed #E4E9EE; }
+.voucher-row span { color: #6b7a88; font-size: 10.5px; }
+.voucher-row b { font-size: 12px; font-weight: 700; }
+.voucher-row.is-empty { border-bottom-color: transparent; }
+.voucher-section-title { margin: 18px 0 8px; font-size: 12px; letter-spacing: .04em; color: #17638F; text-transform: uppercase; }
+.voucher-summary { background: #F5F8FA; border: 1px solid #E4E9EE; border-radius: 12px; padding: 10px 12px; font-size: 11.5px; }
+
+.voucher-price {
+  margin-top: 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  border: 1px solid #E3C27E; background: #FFF9EC; border-radius: 14px; padding: 12px 14px;
+}
+.voucher-price small { display: block; color: #8a7a4d; font-size: 10px; }
+.voucher-price b { font-size: 22px; color: #0B2A43; }
+.voucher-price .cur { font-size: 12px; color: #6b7a88; }
+
+.voucher-terms { margin-top: auto; padding-top: 14px; border-top: 1px solid #E4E9EE; font-size: 9.5px; color: #6b7a88; }
+.voucher-terms ul { margin: 6px 0 0; padding-inline-start: 16px; }
+.voucher-terms li { margin-bottom: 3px; }
+.voucher-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 16px; }
+.voucher-sign div { flex: 1; border-top: 1px solid #C9D3DB; padding-top: 6px; font-size: 9.5px; color: #6b7a88; text-align: center; }
+.voucher-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 14px; font-size: 9px; color: #7b8794; }
+.voucher-foot b { color: #0B2A43; }
+
+/* Small screens: keep the sheet printable but let it scroll horizontally. */
+@media (max-width: 820px) {
+  .voucher-overlay { padding: 12px 8px 28px; }
+  .voucher-sheet { width: 100%; min-height: 0; padding: 18px 14px; }
+  .voucher-toolbar { width: 100%; }
+}
+
+/* ---------- print ---------- */
+@page { size: A4; margin: 0; }
+
+body.voucher-printing > *:not(.voucher-overlay) { display: none !important; }
+body.voucher-printing .voucher-overlay {
+  position: static; inset: auto; background: #fff; padding: 0; overflow: visible; backdrop-filter: none;
+}
+body.voucher-printing .voucher-toolbar { display: none !important; }
+body.voucher-printing .voucher-stage { display: block; }
+body.voucher-printing .voucher-sheet { width: 210mm; min-height: 297mm; box-shadow: none; margin: 0; }
+
+/* faint brand letter in the free area keeps the A4 page from looking empty */
+.voucher-sheet::before {
+  content: "ل";
+  position: absolute;
+  inset-block-start: 56%;
+  inset-inline-start: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 150px;
+  font-weight: 800;
+  color: rgba(11, 42, 67, .035);
+  pointer-events: none;
+}
+.voucher-sheet[data-lang="en"]::before { content: "L"; }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { rmSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createApp } from '../server.js';
+import { STATUSES } from '../lib/domain.js';
 
 const DB = `data/test-${randomBytes(4).toString('hex')}.db`;
 let app;
@@ -462,17 +463,33 @@ test('تسجيل دخول المدير يعيد جلسة httpOnly', async () => 
   assert.equal(me.payload.user.username, adminUser);
 });
 
-test('تغيير حالة الطلب يحترم مسار الحالات', async () => {
-  const row = app.db.prepare("SELECT id FROM requests WHERE type='flight' AND status='new' ORDER BY id DESC LIMIT 1").get();
-  assert.ok(row, 'يلزم وجود طلب جديد للاختبار');
-  const invalid = await call(`/api/admin/requests/${row.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'confirmed' } });
-  assert.equal(invalid.res.status, 422);
-  const valid = await call(`/api/admin/requests/${row.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'reviewing' } });
+test('قائمة الحالات تشمل الحالات المطلوبة وتحترم الإلغاء كحالة نهائية', async () => {
+  if (!adminCookie) adminCookie = (await login(adminUser, adminPass)).cookie;
+  assert.equal(STATUSES.quoted.label, 'تم إرسال العرض');
+  assert.equal(STATUSES.confirmed.label, 'تم التأكيد');
+  assert.equal(STATUSES.awaiting.label, 'في انتظار إعادة الاتصال');
+  assert.equal(STATUSES.in_progress.label, 'قيد المتابعة');
+  for (const target of ['quoted', 'confirmed', 'awaiting', 'in_progress']) {
+    assert.ok(STATUSES.new.next.includes(target), `الحالة الجديدة يجب أن تسمح بالانتقال إلى ${target}`);
+  }
+
+  const first = await call('/api/requests', { method: 'POST', body: { ...flightBody(), phone: '0797770101', destination: 'برلين (BER)' } });
+  assert.equal(first.res.status, 201);
+  const row1 = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(first.payload.reference);
+  const cancel = await call(`/api/admin/requests/${row1.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'cancelled' } });
+  assert.equal(cancel.res.status, 200);
+  const reopen = await call(`/api/admin/requests/${row1.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'confirmed' } });
+  assert.equal(reopen.res.status, 422);
+
+  const second = await call('/api/requests', { method: 'POST', body: { ...flightBody(), phone: '0797770102', destination: 'فيينا (VIE)' } });
+  assert.equal(second.res.status, 201);
+  const row2 = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(second.payload.reference);
+  const valid = await call(`/api/admin/requests/${row2.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'reviewing' } });
   assert.equal(valid.res.status, 200);
-  const check = app.db.prepare('SELECT status FROM requests WHERE id = ?').get(row.id);
-  assert.equal(check.status, 'reviewing');
-  const back = await call(`/api/admin/requests/${row.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'new' } });
+  const back = await call(`/api/admin/requests/${row2.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'new' } });
   assert.equal(back.res.status, 422);
+  const confirmed = await call(`/api/admin/requests/${row2.id}`, { method: 'PATCH', cookie: adminCookie, body: { status: 'confirmed' } });
+  assert.equal(confirmed.res.status, 200);
 });
 
 test('عرض السعر والملاحظات تُسجَّل وتظهر للعميل في التتبع', async () => {
@@ -848,4 +865,36 @@ test('طلبات العميل وسجل الحجز لا تظهر دون الجل�
   const logout = await call('/api/client/auth/logout', { method: 'POST', cookie: first.cookie, body: {} });
   assert.equal(logout.res.status, 200);
   assert.equal((await call('/api/client/bookings', { cookie: first.cookie })).res.status, 401);
+});
+
+test('دليل «من الأردن» يعرض الوجهات والفنادق وشركات الطيران والرحلات وروابط الطلب', async () => {
+  const { res, payload } = await call('/jordan');
+  assert.equal(res.status, 200);
+  assert.match(payload, /دليل السفر من الأردن/);
+  // وجهات
+  assert.match(payload, /أين يسافر الأردنيون/);
+  assert.match(payload, /\/destinations\/dubai/);
+  // فنادق من الأدلة العامة
+  assert.match(payload, /سويس أوتيل المقام/);
+  assert.match(payload, /اطلب هذا الفندق/);
+  assert.match(payload, /\/hotels\?city=/);
+  // شركات طيران تخدم عمّان
+  assert.match(payload, /الملكية الأردنية/);
+  assert.match(payload, /عمّان \(AMM\)/);
+  assert.match(payload, /\/flights\?airline=/);
+  // رحلات مقترحة + أفكار
+  assert.match(payload, /أفكار رحلات تبدأ من عمّان/);
+  assert.match(payload, /عمرة مكة والمدينة/);
+  // شفافية المصدر ومنع الأسعار المنقولة
+  assert.match(payload, /تنبيه المصدر/);
+  assert.match(payload, /لا تمثل أسعارًا/);
+  const sitemap = await call('/sitemap.xml');
+  assert.match(sitemap.payload, /\/jordan/);
+});
+
+test('نموذج الفندق يعبّئ المدينة واسم الفندق من رابط الدليل', async () => {
+  const { res, payload } = await call('/hotels?city=' + encodeURIComponent('إسطنبول') + '&hotelName=' + encodeURIComponent('هيلتون إسطنبول بومونتي'));
+  assert.equal(res.status, 200);
+  assert.match(payload, /value="إسطنبول"/);
+  assert.match(payload, /value="هيلتون إسطنبول بومونتي"/);
 });

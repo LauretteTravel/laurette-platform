@@ -404,9 +404,17 @@
             ${r.quote ? `<li><span>عرض السعر</span><b>${arNum(r.quote.amount)} ${r.quote.currency}</b></li>` : '<li><span>عرض السعر</span><b>لم يُرسل بعد</b></li>'}
           </ul>
           ${r.quote && r.quote.note ? `<div class="notice notice-info mt-2">${r.quote.note}</div>` : ''}
+          <div class="btn-row mt-2"><button type="button" class="btn btn-gold btn-sm" data-voucher="1">عرض القسيمة</button></div>
           <h3 class="mt-3" style="font-size:16px">سجل الحالة</h3>
           <ul class="timeline">${r.timeline.map((t) => `<li><b>${t.message || t.kind}</b><span>${new Date(t.at).toLocaleString('ar-JO')}</span></li>`).join('')}</ul>
         </div>`;
+        const voucherBtn = out.querySelector('[data-voucher]');
+        if (voucherBtn) {
+          voucherBtn.addEventListener('click', () => {
+            if (!window.VoucherGenerator) return;
+            window.VoucherGenerator.open({ request: { ...r, payload: r.details || {} } });
+          });
+        }
       } catch {
         status.textContent = 'تعذر الاتصال بالخادم';
         status.classList.add('is-error');
