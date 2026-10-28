@@ -14,7 +14,8 @@ const otpInbox = new Map();
 const seed = JSON.parse(readFileSync('data/seed.json', 'utf8'));
 adminUser = seed.users[0].username;
 adminPass = 'Test-Only-Admin-Password-42';
-const testSeed = { ...seed, users: seed.users.map(({ password, ...user }) => user) };
+// Production seed accounts require a password change; integration tests use a ready-to-use admin.
+const testSeed = { ...seed, users: seed.users.map(({ password, ...user }) => ({ ...user, mustChange: false })) };
 
 let adminCookie = '';
 let agentCookie = '';
@@ -431,7 +432,7 @@ test('إنشاء طلب طيران يعيد رقماً مرجعياً ويُحف
   assert.ok(row);
   assert.equal(row.type, 'flight');
   assert.equal(row.status, 'new');
-  assert.equal(row.department, 'تذاكر الطيران');
+  assert.equal(row.department, 'قسم التذاكر');
   const customer = app.db.prepare('SELECT * FROM customers WHERE phone = ?').get('0790000001');
   assert.ok(customer);
 });
