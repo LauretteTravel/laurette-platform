@@ -1145,3 +1145,61 @@ html[dir="ltr"] .lang-switch[lang="ar"] { font-size: 17px; }
 @media (max-width: 420px) {
   .brand-logo, .site-header .brand-logo { height: 35px; }
 }
+
+/* ===================== PRINTABLE CATALOG ===================== */
+.catalog-tools { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 16px 0 22px; padding: 18px; }
+.catalog-tools > div:first-child { max-width: 460px; }
+.catalog-tools b { color: var(--navy); }
+.catalog-tools p { margin: 5px 0 0; font-size: 13px; }
+.catalog-links { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.catalog-page { background: #f4f7f9; }
+.catalog-header { display: flex; align-items: center; gap: 24px; padding: 24px; background: #fff; border: 1px solid var(--line); border-radius: 18px; }
+.catalog-header > img { width: 210px; height: 92px; object-fit: contain; }
+.catalog-header > div:nth-child(2) { flex: 1; }
+.catalog-header > div:nth-child(2) > span { color: var(--gold-2); font-weight: 800; }
+.catalog-header h1 { margin: 4px 0; font-size: 28px; }
+.catalog-header p { margin: 0; color: var(--muted); }
+.catalog-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalog-generated { margin: 14px 0; color: var(--muted); font-size: 13px; }
+.catalog-programs { display: grid; gap: 14px; }
+.catalog-program { padding: 20px; background: #fff; border: 1px solid var(--line); border-radius: 16px; break-inside: avoid; }
+.catalog-program-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.catalog-category { color: var(--blue); font-size: 12px; font-weight: 800; }
+.catalog-program h2 { margin: 3px 0; font-size: 20px; }
+.catalog-price { min-width: 150px; display: flex; flex-direction: column; gap: 2px; text-align: end; }
+.catalog-price b { color: var(--navy); font-size: 22px; }
+.catalog-price small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.catalog-summary { margin: 10px 0; color: var(--muted); }
+.catalog-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.catalog-facts > div { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; background: #f5f8fa; border-radius: 10px; }
+.catalog-facts b, .catalog-detail > b { color: var(--navy); font-size: 12px; }
+.catalog-facts span, .catalog-detail li, .catalog-muted { font-size: 13px; }
+.catalog-detail { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; }
+.catalog-detail ul { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0; }
+.catalog-footer { display: flex; flex-direction: column; gap: 4px; margin-top: 18px; padding: 16px; border-top: 2px solid var(--gold-2); color: var(--muted); font-size: 12px; }
+.catalog-footer b { color: var(--navy); font-size: 14px; }
+@media (max-width: 760px) {
+  .catalog-tools, .catalog-header { align-items: stretch; flex-direction: column; }
+  .catalog-header > img { width: 170px; height: 74px; }
+  .catalog-actions { justify-content: flex-start; }
+}
+@media print {
+  body.print-catalog-page { background: #fff !important; color: #142f43; }
+  body.print-catalog-page .site-header,
+  body.print-catalog-page .site-footer,
+  body.print-catalog-page .skip-link,
+  body.print-catalog-page .float-actions,
+  body.print-catalog-page .sound-toggle,
+  body.print-catalog-page #waModal,
+  body.print-catalog-page #offerDialog,
+  body.print-catalog-page .catalog-actions { display: none !important; }
+  body.print-catalog-page .catalog-page { padding: 0 !important; background: #fff !important; }
+  body.print-catalog-page .wrap { width: 100%; }
+  body.print-catalog-page .catalog-header,
+  body.print-catalog-page .catalog-program { border-color: #cbd5dc; box-shadow: none; }
+  body.print-catalog-page .catalog-program { margin-bottom: 10px; }
+  body.print-catalog-page .catalog-programs { gap: 0; }
+  body.print-catalog-page a { color: inherit; text-decoration: none; }
+  body.print-catalog-page .catalog-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @page { size: A4; margin: 14mm; }
+}
