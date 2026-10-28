@@ -101,6 +101,7 @@
       if (key in data) data[key] = data[key] === '' ? undefined : Number(data[key]);
     }
     data.consent = !!(form.querySelector('[name="consent"]') && form.querySelector('[name="consent"]').checked);
+    data.whatsappUpdates = !!(form.querySelector('[name="whatsappUpdates"]') && form.querySelector('[name="whatsappUpdates"]').checked);
 
     if (type === 'flight') {
       data.tripType = String(fd.get('tripType') || 'return');
