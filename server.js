@@ -12,7 +12,7 @@ import { emailConfigured, sendClientOtp } from './lib/client-email.js';
 import { HttpError, createRouter, json, html, text, redirect, parseCookies, securityHeaders, clientIp, RateLimiter } from './lib/http.js';
 import { artSvg, ART_KEYS } from './lib/art.js';
 import { ASSET_V, trackingFlags } from './lib/views/layout.js';
-import { homePage, programsPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
+import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage } from './lib/views/public2.js';
 import * as API from './lib/api.js';
 import * as CLIENT_API from './lib/client-api.js';
@@ -69,6 +69,7 @@ export function createApp(options = {}) {
   };
 
   router.get('/', page(homePage));
+  router.get('/programs/print', page(programsPrintPage));
   router.get('/programs', page(programsPage));
   router.get('/offers', page(offersPage));
   router.get('/programs/:slug', page(programPage));
@@ -143,6 +144,7 @@ export function createApp(options = {}) {
   router.patch('/api/client/profile', CLIENT_API.updateClientProfile);
 
   router.post('/api/requests', api(API.createRequestApi, { limit: '/api/requests' }));
+  router.post('/api/admin/requests', api(API.createInternalRequest, { action: 'requests:write', limit: '/api/requests' }));
   router.post('/api/track', api(API.trackRequest, { limit: '/api/track' }));
   router.get('/api/programs', API.listProgramsApi);
   router.get('/api/programs/:slug', API.getProgramApi);
@@ -154,6 +156,9 @@ export function createApp(options = {}) {
   router.get('/api/admin/requests', api(API.listRequests, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id', api(API.getRequest, { action: 'requests:read' }));
   router.patch('/api/admin/requests/:id', api(API.updateRequest, { action: 'requests:write' }));
+  router.post('/api/admin/requests/:id/transfers', api(API.createRequestTransfer, { action: 'requests:write' }));
+  router.get('/api/admin/transfers', api(API.listRequestTransfers, { action: 'requests:read' }));
+  router.post('/api/admin/transfers/:id/respond', api(API.respondRequestTransfer, { action: 'requests:write' }));
   router.get('/api/admin/customers', api(API.listCustomers, { action: 'customers:read' }));
   router.get('/api/admin/customers/:id', api(API.getCustomer, { action: 'customers:read' }));
   router.patch('/api/admin/customers/:id', api(API.updateCustomer, { action: 'customers:write' }));
@@ -168,6 +173,11 @@ export function createApp(options = {}) {
   router.get('/api/admin/users', api(API.listUsers, { action: 'users:write' }));
   router.post('/api/admin/users', api(API.createUser, { action: 'users:write' }));
   router.patch('/api/admin/users/:id', api(API.updateUser, { action: 'users:write' }));
+  router.get('/api/admin/organization', api(API.organization, { action: 'organization:read' }));
+  router.post('/api/admin/branches', api(API.createBranch, { action: 'organization:write' }));
+  router.post('/api/admin/departments', api(API.createDepartment, { action: 'organization:write' }));
+  router.post('/api/admin/roles', api(API.createRole, { action: 'organization:write' }));
+  router.patch('/api/admin/roles/:roleKey', api(API.updateRole, { action: 'organization:write' }));
   router.get('/api/admin/audit', api(API.auditLog, { action: 'audit:read' }));
   router.get('/api/admin/media', api(API.listMedia, { action: 'content:write' }));
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
