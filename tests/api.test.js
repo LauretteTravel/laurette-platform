@@ -578,10 +578,20 @@ test('هيكل CRM والصلاحيات المقيّدة وتحويل الطلب
   app.db.prepare('UPDATE requests SET branch_id = ?, department_id = ? WHERE id = ?').run(branchId, deptA.payload.id, rowA.id);
   app.db.prepare('UPDATE requests SET branch_id = ?, department_id = ? WHERE id = ?').run(branchId, deptB.payload.id, rowB.id);
 
-  const loginA = await login('crmtesta', 'ScopedUserPass123');
-  const loginB = await login('crmtestb', 'ScopedUserPass123');
-  assert.equal(loginA.res.status, 200);
-  assert.equal(loginB.res.status, 200);
+  const initialLoginA = await login('crmtesta', 'ScopedUserPass123');
+  const initialLoginB = await login('crmtestb', 'ScopedUserPass123');
+  assert.equal(initialLoginA.res.status, 200);
+  assert.equal(initialLoginB.res.status, 200);
+  for (const session of [initialLoginA, initialLoginB]) {
+    assert.equal(session.payload.user.mustChange, true);
+    const changed = await call('/api/auth/change-password', {
+      method: 'POST', cookie: session.cookie,
+      body: { currentPassword: 'ScopedUserPass123', newPassword: 'ScopedUserPass1234' },
+    });
+    assert.equal(changed.res.status, 200);
+  }
+  const loginA = await login('crmtesta', 'ScopedUserPass1234');
+  const loginB = await login('crmtestb', 'ScopedUserPass1234');
   const scopedList = await call('/api/admin/requests', { cookie: loginA.cookie });
   assert.deepEqual(scopedList.payload.requests.map((request) => request.reference), [requestA.payload.reference]);
   const hiddenRequest = await call(`/api/admin/requests/${rowB.id}`, { cookie: loginA.cookie });
@@ -653,7 +663,15 @@ test('الموظف يرى الطلبات ولا يستطيع إدارة البر
     body: { username: 'agent1', name: 'موظف اختبار', role: 'agent', department: 'تذاكر الطيران', password: 'AgentPass123' },
   });
   assert.equal(created.res.status, 201);
-  const session = await login('agent1', agentPass);
+  const initialSession = await login('agent1', agentPass);
+  assert.equal(initialSession.res.status, 200);
+  assert.equal(initialSession.payload.user.mustChange, true);
+  const changed = await call('/api/auth/change-password', {
+    method: 'POST', cookie: initialSession.cookie,
+    body: { currentPassword: agentPass, newPassword: 'AgentPass1234' },
+  });
+  assert.equal(changed.res.status, 200);
+  const session = await login('agent1', 'AgentPass1234');
   assert.equal(session.res.status, 200);
   agentCookie = session.cookie;
 
