@@ -10,13 +10,18 @@ import { dirname, join } from 'node:path';
 const platformRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = join(platformRoot, '..');
 const readJson = (p, fallback) => {
-  try { return JSON.parse(fs.readFileSync(join(projectRoot, p), 'utf8')); } catch { return fallback; }
+  // Source data lives in data/source (committed) with a fallback to ../work for older checkouts.
+  const candidates = [join(platformRoot, p), join(projectRoot, p)];
+  for (const file of candidates) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* try next */ }
+  }
+  return fallback;
 };
 
-const legacy = readJson('work/legacy-def.json');
-const content = readJson('work/legacy-content.json', {});
-const content2 = readJson('work/legacy-content2.json', {});
-const pack = readJson('work/content-pack.json', { articles: [], faq: [], umrahSteps: [], visaGuidance: [], hotelTips: [] });
+const legacy = readJson('data/source/legacy-def.json');
+const content = readJson('data/source/legacy-content.json', {});
+const content2 = readJson('data/source/legacy-content2.json', {});
+const pack = readJson('data/source/content-pack.json', { articles: [], faq: [], umrahSteps: [], visaGuidance: [], hotelTips: [] });
 
 const CATS = { umrah: 'الحج والعمرة', cruise: 'رحلات الكروز', sharm: 'شرم الشيخ', istanbul: 'إسطنبول' };
 const MODE = { air: 'جوي', bus: 'بري (حافلات)', sea: 'بحري' };

@@ -1,5 +1,7 @@
 # منصة لوريت للسياحة والسفر
 
+[![CI](https://github.com/LauretteTravel/laurette-platform/actions/workflows/node.js.yml/badge.svg)](https://github.com/LauretteTravel/laurette-platform/actions/workflows/node.js.yml)
+
 منصة تشغيل كاملة لشركة **لوريت للسياحة والسفر والحج والعمرة**: موقع عربي (RTL) لست خدمات، ونظام طلبات حقيقي بقاعدة بيانات، ولوحة إدارة بصلاحيات، ومساعد آلي مربوط بقاعدة المعرفة، وتحسين ظهور تقني.
 
 النسخة تعمل محليًا **بصفر اعتماديات خارجية**: خادم `node:http` مدمج، وقاعدة `node:sqlite` مدمجة، وواجهة بلا أطر عمل. لا `npm install`، ولا مفاتيح API في الواجهة.
@@ -342,3 +344,13 @@ git push -u origin main
 3. الوكيل يمرر `X-Forwarded-For` و`X-Forwarded-Proto`؛ الكود يفعّل `Secure` تلقائيًا عند HTTPS.
 4. نسخ احتياطي يومي للقاعدة، ومراقبة `/health`.
 5. غيّر كلمة مرور المدير، وأنشئ حسابًا لكل موظف بدل مشاركة حساب واحد.
+
+## بناء البذرة (data/seed.json)
+
+ملفات المصدر اللازمة لإعادة بناء البذرة محفوظة داخل المستودع في data/source/ (legacy-def.json, legacy-content.json, legacy-content2.json, content-pack.json)، لذلك:
+
+\ash
+node tools/build-seed.mjs   # يعيد بناء data/seed.json من المصدر
+node server.js              # البذر التلقائي عند أول تشغيل
+\\n
+لا تُحفظ أي كلمة مرور في seed.json. عند غياب ADMIN_PASSWORD يولّد الخادم كلمة مرور مؤقتة ويكتبها في data/admin-credentials.txt (غير متعقّب في git).
