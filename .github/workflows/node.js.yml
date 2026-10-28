@@ -1,31 +1,48 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
-
-name: Node.js CI
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-
+  test:
+    name: اختبارات (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [18.x, 20.x, 22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        # node:sqlite يحتاج 22.5+، لذلك لا نختبر 18/20
+        node: ["22.x", "24.x"]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+      - uses: actions/checkout@v4
+
+      - name: تجهيز Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: إصدار Node
+        run: node --version
+
+      - name: فحص الصياغة
+        run: node --check server.js
+
+      - name: الاختبارات (53 اختبارًا، بلا اعتماديات خارجية)
+        run: npm test
+        env:
+          NODE_ENV: test
+
+      - name: التحقق من بناء البذرة
+        run: node tools/build-seed.mjs
