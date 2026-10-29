@@ -16,6 +16,7 @@ import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hote
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
 import * as API from './lib/api.js';
 import * as CLIENT_API from './lib/client-api.js';
+import * as WHATSAPP from './lib/whatsapp.js';
 import { COOKIE } from './lib/api.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
 import { localizeHtml, dictionary } from './lib/i18n.js';
@@ -73,6 +74,14 @@ export function createApp(options = {}) {
   const limiter = new RateLimiter();
   const router = createRouter();
   const startedAt = Date.now();
+  const whatsappWorker = WHATSAPP.whatsappNotificationsReady()
+    ? setInterval(() => {
+      WHATSAPP.processWhatsAppOutbox(db).catch((error) => {
+        console.error('[whatsapp] outbox worker failed:', error.message);
+      });
+    }, 5_000)
+    : null;
+  whatsappWorker?.unref();
 
   /* ---------------- pages ---------------- */
   const sendHtml = (ctx, status, body, headers = {}) => html(
@@ -167,6 +176,8 @@ export function createApp(options = {}) {
   router.get('/api/client/profile', CLIENT_API.currentClient);
   router.patch('/api/client/profile', CLIENT_API.updateClientProfile);
 
+  router.get('/api/whatsapp/webhook', WHATSAPP.verifyWebhook);
+  router.post('/api/whatsapp/webhook', api(WHATSAPP.receiveWebhook));
   router.post('/api/requests', api(API.createRequestApi, { limit: '/api/requests' }));
   router.post('/api/admin/requests', api(API.createInternalRequest, { action: 'requests:write', limit: '/api/requests' }));
   router.post('/api/track', api(API.trackRequest, { limit: '/api/track' }));
@@ -460,6 +471,7 @@ export function createApp(options = {}) {
       });
     },
     close() {
+      if (whatsappWorker) clearInterval(whatsappWorker);
       return new Promise((resolvePromise) => {
         server.close(() => {
           try { db.close(); } catch { /* ignore */ }

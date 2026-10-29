@@ -46,3 +46,21 @@ jobs:
 
       - name: التحقق من بناء البذرة
         run: node tools/build-seed.mjs
+
+  deploy_render:
+    name: Deploy to Render
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::notice::Add the RENDER_DEPLOY_HOOK Actions secret to enable Render auto-deploys."
+            exit 0
+          fi
+          curl --fail --silent --show-error --output /dev/null --request POST "$RENDER_DEPLOY_HOOK"
+          echo "Render deploy requested."
