@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { rmSync } from 'node:fs';
+import { rmSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { createApp } from '../server.js';
 import { openDb } from '../lib/db.js';
@@ -192,5 +192,127 @@ test('الموقع يُطلق الإرسال فعليًا عند إنشاء طل
   await app.close();
   delete process.env.N8N_BOOKING_WEBHOOK_URL;
   delete process.env.N8N_BOOKING_WEBHOOK_SECRET;
+  for (const s of ['', '-wal', '-shm']) { try { rmSync(dbFile + s); } catch { /* ignore */ } }
+});
+
+test('تغيير الحالة يُرسل booking.status_changed مع from/to و closed', async () => {
+  RECEIVED.length = 0;
+  process.env.N8N_BOOKING_WEBHOOK_URL = receiverUrl;
+  process.env.N8N_BOOKING_WEBHOOK_SECRET = 'status-secret';
+  process.env.N8N_API_KEY = 'proxy-key-123';
+
+  const dbFile = `data/test-${randomBytes(4).toString('hex')}.db`;
+  const seedFile = JSON.parse(readFileSync('data/seed.json', 'utf8'));
+  const app = createApp({
+    dbFile,
+    baseUrl: 'http://127.0.0.1:0',
+    seed: { ...seedFile, users: seedFile.users.map(({ password, ...u }) => u) },
+    adminPassword: 'Test-Only-Admin-Password-42',
+    sendVerificationEmail: async () => {},
+  });
+  const addr = await app.listen(0, '127.0.0.1');
+  const base = `http://127.0.0.1:${addr.port}`;
+
+  const login = await fetch(`${base}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    body: JSON.stringify({ username: 'laurette', password: 'Test-Only-Admin-Password-42' }),
+  });
+  const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+  assert.equal(login.status, 200);
+
+  const created = await fetch(`${base}/api/requests`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    body: JSON.stringify({ type: 'consult', topic: 'general', name: 'حالة ويبهوك', phone: '0792222222', consent: true, message: 'اختبار مزامنة الحالة مع الشيت' }),
+  });
+  const createdPayload = await created.json();
+  assert.equal(created.status, 201);
+  const reference = createdPayload.reference;
+
+  const row = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(reference);
+  const patched = await fetch(`${base}/api/admin/requests/${row.id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', cookie },
+    body: JSON.stringify({ status: 'quoted' }),
+  });
+  assert.equal(patched.status, 200, await patched.text());
+
+  let statusEvent = null;
+  for (let i = 0; i < 25 && !statusEvent; i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+    statusEvent = RECEIVED.find((r) => r.body?.reference === reference && r.body?.event === 'booking.status_changed') || null;
+  }
+  assert.ok(statusEvent, 'لم يُرسل حدث تغيير الحالة');
+  assert.equal(statusEvent.body.from, 'new');
+  assert.equal(statusEvent.body.to, 'quoted');
+  assert.equal(statusEvent.body.closed, false);
+  assert.equal(statusEvent.headers['x-api-key'], 'proxy-key-123', 'ترويسة الوسيط X-API-Key مفقودة');
+  assert.ok(verifySignature({
+    secret: 'status-secret',
+    timestamp: statusEvent.headers['x-loret-timestamp'],
+    rawBody: statusEvent.raw,
+    signature: statusEvent.headers['x-loret-signature'],
+  }));
+
+  // الإغلاق: confirmed ⇒ closed = true (يوقف تصعيد 24 ساعة في الشيت)
+  const closing = await fetch(`${base}/api/admin/requests/${row.id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', cookie },
+    body: JSON.stringify({ status: 'confirmed' }),
+  });
+  assert.equal(closing.status, 200, await closing.text());
+
+  let closedEvent = null;
+  for (let i = 0; i < 25 && !closedEvent; i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+    closedEvent = RECEIVED.find((r) => r.body?.reference === reference && r.body?.to === 'confirmed') || null;
+  }
+  assert.ok(closedEvent, 'لم يُرسل حدث الإغلاق');
+  assert.equal(closedEvent.body.closed, true);
+
+  const logged = app.db.prepare("SELECT COUNT(*) n FROM webhook_deliveries WHERE reference = ? AND event = 'booking.status_changed'").get(reference);
+  assert.ok(logged.n >= 2, 'يجب تسجيل حدثي الحالة على الأقل');
+
+  await app.close();
+  delete process.env.N8N_BOOKING_WEBHOOK_URL;
+  delete process.env.N8N_BOOKING_WEBHOOK_SECRET;
+  delete process.env.N8N_API_KEY;
+  for (const s of ['', '-wal', '-shm']) { try { rmSync(dbFile + s); } catch { /* ignore */ } }
+});
+
+test('وضع مفتاح فقط: N8N_WEBHOOK_KEY يعمل بلا HMAC', async () => {
+  RECEIVED.length = 0;
+  const dbFile = `data/test-${randomBytes(4).toString('hex')}.db`;
+  const db = openDb(dbFile);
+  const env = { N8N_WEBHOOK_URL: receiverUrl, N8N_WEBHOOK_KEY: 'header-auth-key' };
+  const res = await notifyBooking(db, sampleRequest, {}, { env });
+  assert.equal(res.status, 'delivered');
+  const rec = RECEIVED[0];
+  assert.equal(rec.headers['x-api-key'], 'header-auth-key');
+  assert.equal(rec.headers['x-loret-signature'], undefined, 'لا يجب إرسال توقيع بلا سر');
+  assert.equal(rec.body.event, 'booking.created');
+  for (const s of ['', '-wal', '-shm']) { try { rmSync(dbFile + s); } catch { /* ignore */ } }
+});
+
+test('سياسة الخصوصية تذكر n8n وGoogle Sheets والبريد', async () => {
+  const dbFile = `data/test-${randomBytes(4).toString('hex')}.db`;
+  const seedFile = JSON.parse(readFileSync('data/seed.json', 'utf8'));
+  const app = createApp({
+    dbFile,
+    baseUrl: 'http://127.0.0.1:0',
+    seed: { ...seedFile, users: seedFile.users.map(({ password, ...u }) => u) },
+    adminPassword: 'Test-Only-Admin-Password-42',
+    sendVerificationEmail: async () => {},
+  });
+  const addr = await app.listen(0, '127.0.0.1');
+  const res = await fetch(`http://127.0.0.1:${addr.port}/privacy`);
+  const html = await res.text();
+  assert.equal(res.status, 200);
+  assert.match(html, /n8n/);
+  assert.match(html, /Google Sheets/);
+  assert.match(html, /Gmail/);
+  assert.match(html, /قاعدة بيانات الموقع هي المصدر الرسمي/);
+  await app.close();
   for (const s of ['', '-wal', '-shm']) { try { rmSync(dbFile + s); } catch { /* ignore */ } }
 });
