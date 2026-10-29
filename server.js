@@ -207,6 +207,7 @@ export function createApp(options = {}) {
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
   router.get('/api/admin/reports.csv', api(API.reportsCsv, { action: 'reports:read' }));
   router.get('/api/admin/tracking-events', api(API.trackingEvents, { action: 'overview:read' }));
+  router.get('/api/admin/webhooks', api(API.webhookDeliveries, { action: 'overview:read' }));
   router.get('/api/admin/settings', api(API.getSettings, { action: 'settings:write' }));
   router.patch('/api/admin/settings', api(API.updateSettings, { action: 'settings:write' }));
   router.get('/api/admin/assistant-log', api(API.assistantLog, { action: 'overview:read' }));

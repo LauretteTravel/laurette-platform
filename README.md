@@ -364,3 +364,11 @@ node server.js              # البذر التلقائي عند أول تشغي
 | أي خادم Node | ode server.js | اضبط PORT وBASE_URL وADMIN_PASSWORD |
 
 **مهم:** GitHub Pages لا يشغّل هذا التطبيق (Node + SQLite). إن كان Pages مفعّلًا على المستودع فأوقفه من Settings → Pages.
+
+## تكامل n8n (إشعارات الحجوزات)
+
+الموقع يرسل ooking.created إلى n8n بتوقيع HMAC، ويُسجَّل كل إرسال في webhook_deliveries (يُعرض عبر /api/admin/webhooks).
+
+- المتغيرات: N8N_BOOKING_WEBHOOK_URL, N8N_BOOKING_WEBHOOK_SECRET, N8N_BOOKING_TIMEOUT_MS (اختياري).
+- الـworkflow الجاهز: integrations/n8n/laurette-booking-workflow.json.
+- الدليل الكامل (SMTP + Render + اختبار): docs/n8n-smtp-setup.md.

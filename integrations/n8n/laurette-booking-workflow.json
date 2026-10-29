@@ -1,0 +1,212 @@
+{
+  "name": "لوريت — إشعارات الحجوزات (Booking → Email)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## لوريت — إشعار حجز جديد\n\n**ما يفعله هذا الـworkflow:**\n1. يستقبل POST من الموقع على المسار `laurette-booking`.\n2. يتحقق من توقيع HMAC-SHA256 في الهيدر `x-loret-signature`.\n3. يرسل بريدًا لفريق الحجز + ردًا تلقائيًا للعميل (إن أدخل بريده).\n\n**قبل التفعيل:**\n- أنشئ Credential من نوع **SMTP** واسمه `Laurette SMTP`.\n- أضف متغيرات البيئة في n8n:\n  - `N8N_BOOKING_WEBHOOK_SECRET` (نفس قيمة Render)\n  - `BOOKING_NOTIFY_TO` (بريد فريق الحجز)\n  - `BOOKING_FROM` (بريد المرسل المعتمد في SMTP)\n- انسخ **Production URL** من عقدة الويبهوك وضعه في Render باسم `N8N_BOOKING_WEBHOOK_URL`.\n- فعّل الـworkflow (Active) وإلا سيرجع 404.",
+        "height": 420,
+        "width": 420,
+        "color": 4
+      },
+      "id": "note-setup",
+      "name": "تعليمات الإعداد",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-460, -60]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "laurette-booking",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "webhook-booking",
+      "name": "استقبال طلب الحجز",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-200, 120],
+      "webhookId": "laurette-booking-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// التحقق من توقيع HMAC-SHA256\n// التوقيع = sha256(secret, `${timestamp}.${rawBody}`)\nconst crypto = require('crypto');\n\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst body = item.body || {};\n\n// الموقع يرسل JSON مضغوطًا بلا مسافات، وإعادة التسلسل هنا تعطي نفس السلسلة.\nconst rawBody = typeof item.bodyRaw === 'string' && item.bodyRaw.length\n  ? item.bodyRaw\n  : JSON.stringify(body);\n\nconst secret = $env.N8N_BOOKING_WEBHOOK_SECRET;\nconst timestamp = String(headers['x-loret-timestamp'] || '');\nconst signature = String(headers['x-loret-signature'] || '');\n\nconst ts = Number(timestamp);\nconst fresh = Number.isFinite(ts) && Math.abs(Math.floor(Date.now() / 1000) - ts) <= 300;\nconst expected = secret\n  ? 'sha256=' + crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex')\n  : '';\n\nlet valid = false;\nif (expected && signature && expected.length === signature.length) {\n  valid = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));\n}\n\nreturn [{\n  json: {\n    valid: valid && fresh,\n    reason: !secret ? 'missing-secret' : (!signature ? 'missing-signature' : (!fresh ? 'stale-timestamp' : (!valid ? 'bad-signature' : 'ok'))),\n    event: body,\n    receivedAt: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "code-verify",
+      "name": "تحقق التوقيع",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-valid",
+      "name": "توقيع صالح؟",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [280, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": false, \"error\": \"invalid_signature\", \"reason\": $json.reason } }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "respond-401",
+      "name": "رفض (401)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.BOOKING_FROM }}",
+        "toEmail": "={{ $env.BOOKING_NOTIFY_TO }}",
+        "subject": "=حجز جديد {{ $json.event.reference }} — {{ $json.event.typeLabel }}",
+        "emailFormat": "html",
+        "html": "={{ `<div dir=\"rtl\" style=\"font-family:Arial,sans-serif;line-height:1.9;color:#14263A\">\n  <h2 style=\"color:#0B2A43;margin:0 0 6px\">حجز جديد — ${$json.event.typeLabel}</h2>\n  <p style=\"margin:0 0 14px;color:#5C7285\">الرقم المرجعي: <b>${$json.event.reference}</b> · ${new Date($json.event.createdAt).toLocaleString('ar-JO')}</p>\n  <table cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%;max-width:620px\">\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>الاسم</b></td><td style=\"border:1px solid #E5E0D6\">${$json.event.customer.name || '—'}</td></tr>\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>الهاتف</b></td><td style=\"border:1px solid #E5E0D6\" dir=\"ltr\">${$json.event.customer.phone || '—'}</td></tr>\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>البريد</b></td><td style=\"border:1px solid #E5E0D6\" dir=\"ltr\">${$json.event.customer.email || '—'}</td></tr>\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>القسم</b></td><td style=\"border:1px solid #E5E0D6\">${$json.event.department || '—'}</td></tr>\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>التفاصيل</b></td><td style=\"border:1px solid #E5E0D6\">${$json.event.summary || '—'}</td></tr>\n    <tr><td style=\"background:#F7F4EE;border:1px solid #E5E0D6\"><b>المصدر</b></td><td style=\"border:1px solid #E5E0D6\">${$json.event.source || 'website'}</td></tr>\n  </table>\n  <p style=\"margin:18px 0 0\"><a href=\"${$json.event.meta.dashboardUrl || '#'}\" style=\"background:#D9A34A;color:#0B2A43;padding:10px 18px;border-radius:10px;text-decoration:none;font-weight:bold\">افتح لوحة الإدارة</a></p>\n  <p style=\"color:#5C7285;font-size:12px;margin-top:18px\">رسالة آلية من موقع لوريت. لا تردّ على هذا البريد.</p>\n</div>` }}",
+        "options": {}
+      },
+      "id": "email-team",
+      "name": "إشعار الفريق",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [540, 60],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_SMTP_CREDENTIAL_ID",
+          "name": "Laurette SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-email",
+              "leftValue": "={{ $json.event.customer.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-customer-email",
+      "name": "لدى العميل بريد؟",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 60]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.BOOKING_FROM }}",
+        "toEmail": "={{ $json.event.customer.email }}",
+        "subject": "=استلمنا طلبك {{ $json.event.reference }} — لوريت للسياحة والسفر",
+        "emailFormat": "html",
+        "html": "={{ `<div dir=\"rtl\" style=\"font-family:Arial,sans-serif;line-height:1.9;color:#14263A\">\n  <h2 style=\"color:#0B2A43\">أهلًا ${$json.event.customer.name || ''}</h2>\n  <p>استلمنا طلبك (<b>${$json.event.typeLabel}</b>) وسجّلناه بالرقم المرجعي:</p>\n  <p style=\"font-size:22px;font-weight:bold;color:#17638F;letter-spacing:1px\">${$json.event.reference}</p>\n  <p>${$json.event.summary || ''}</p>\n  <p>سيتواصل معك أحد مستشاري لوريت خلال ساعات العمل لتأكيد التفاصيل والسعر النهائي. يمكنك متابعة حالة الطلب من هنا:</p>\n  <p><a href=\"${$json.event.meta.trackUrl || '#'}\" style=\"color:#17638F\">متابعة الطلب</a></p>\n  <p style=\"color:#5C7285;font-size:12px\">الأسعار المعروضة «تبدأ من» وتُثبَّت فقط في العرض الرسمي.</p>\n</div>` }}",
+        "options": {}
+      },
+      "id": "email-customer",
+      "name": "رد تلقائي للعميل",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1060, -40],
+      "credentials": {
+        "smtp": {
+          "id": "REPLACE_SMTP_CREDENTIAL_ID",
+          "name": "Laurette SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true, \"reference\": $json.event.reference } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-200",
+      "name": "تم (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1060, 180]
+    }
+  ],
+  "connections": {
+    "استقبال طلب الحجز": {
+      "main": [[{ "node": "تحقق التوقيع", "type": "main", "index": 0 }]]
+    },
+    "تحقق التوقيع": {
+      "main": [[{ "node": "توقيع صالح؟", "type": "main", "index": 0 }]]
+    },
+    "توقيع صالح؟": {
+      "main": [
+        [{ "node": "إشعار الفريق", "type": "main", "index": 0 }],
+        [{ "node": "رفض (401)", "type": "main", "index": 0 }]
+      ]
+    },
+    "إشعار الفريق": {
+      "main": [[{ "node": "لدى العميل بريد؟", "type": "main", "index": 0 }]]
+    },
+    "لدى العميل بريد؟": {
+      "main": [
+        [{ "node": "رد تلقائي للعميل", "type": "main", "index": 0 }],
+        [{ "node": "تم (200)", "type": "main", "index": 0 }]
+      ]
+    },
+    "رد تلقائي للعميل": {
+      "main": [[{ "node": "تم (200)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

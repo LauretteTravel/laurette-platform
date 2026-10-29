@@ -39,7 +39,7 @@ jobs:
       - name: فحص الصياغة
         run: node --check server.js
 
-      - name: الاختبارات (53 اختبارًا، بلا اعتماديات خارجية)
+      - name: الاختبارات — api + webhook + i18n + voucher
         run: npm test
         env:
           NODE_ENV: test
