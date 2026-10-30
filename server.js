@@ -2,10 +2,10 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-import { openDb, seedDatabase, loadSeed, one, q } from './lib/db.js';
+import { openDb, seedDatabase, loadSeed, one, exec, q } from './lib/db.js';
 import { hashPassword, sessionUser, purgeExpiredSessions } from './lib/auth.js';
 import { CLIENT_COOKIE, clientSessionUser } from './lib/client-auth.js';
 import { emailConfigured, sendClientOtp } from './lib/client-email.js';
@@ -60,6 +60,42 @@ function ensureAdminPassword() {
   return generated;
 }
 
+/* One-time, owner-initiated admin password recovery.
+   Trigger: env ADMIN_RESET="<new password>" (optionally ADMIN_RESET_USER="<username>"),
+   or a committed admin-reset.json {"username":"laurette","password":"..."} at the repo root.
+   Each password value is applied at most once: its sha256 is stored in meta.admin_reset_token.
+   The trigger also forces a password change on next login and clears existing sessions.
+   Remove the trigger (or unset the env var) once the password has been rotated. */
+function applyAdminPasswordRecovery(db) {
+  let trigger = null;
+  if (process.env.ADMIN_RESET) {
+    trigger = { username: process.env.ADMIN_RESET_USER || null, password: process.env.ADMIN_RESET };
+  } else if (existsSync(join(HERE, 'admin-reset.json'))) {
+    try {
+      trigger = JSON.parse(readFileSync(join(HERE, 'admin-reset.json'), 'utf8'));
+    } catch {
+      console.warn('[admin-recovery] admin-reset.json is not valid JSON — ignored.');
+      return;
+    }
+  }
+  if (!trigger || !trigger.password) return;
+  const token = createHash('sha256').update(String(trigger.password)).digest('hex');
+  const applied = one(db, "SELECT value FROM meta WHERE key = 'admin_reset_token'")?.value;
+  if (applied === token) return;
+  const user = trigger.username
+    ? one(db, 'SELECT id, username FROM users WHERE username = ? AND active = 1', [String(trigger.username)])
+    : one(db, "SELECT id, username FROM users WHERE role = 'admin' AND active = 1 ORDER BY id LIMIT 1");
+  if (!user) {
+    console.warn('[admin-recovery] no active user matches the recovery trigger — ignored.');
+    return;
+  }
+  const { hash, salt } = hashPassword(String(trigger.password));
+  exec(db, 'UPDATE users SET password_hash = ?, password_salt = ?, must_change = 1 WHERE id = ?', [hash, salt, user.id]);
+  exec(db, 'DELETE FROM sessions WHERE user_id = ?', [user.id]);
+  exec(db, "INSERT INTO meta (key, value) VALUES ('admin_reset_token', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", [token]);
+  console.warn(`[admin-recovery] Admin password reset for "${user.username}" — it must be changed on first login. Remove the recovery trigger afterwards.`);
+}
+
 export function createApp(options = {}) {
   const dbFile = options.dbFile || process.env.DB_FILE || join(HERE, 'data', 'laurette.db');
   const baseUrl = (options.baseUrl || process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -69,6 +105,9 @@ export function createApp(options = {}) {
   const seed = options.seed || loadSeed(options.seedFile || join(HERE, 'data', 'seed.json'));
   const adminPassword = options.adminPassword || process.env.ADMIN_PASSWORD || localAdminPassword() || ensureAdminPassword();
   const seedResult = seedDatabase(db, seed, hashPassword, adminPassword);
+  // Recovery only runs for real server boots (server.js CLI). Programmatic boots that pass
+  // their own seed/adminPassword (tests, tools) are skipped so fixtures stay untouched.
+  if (!options.seed && !options.adminPassword) applyAdminPasswordRecovery(db);
   purgeExpiredSessions(db);
 
   const limiter = new RateLimiter();
