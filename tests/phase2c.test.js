@@ -289,6 +289,8 @@ test("2C type spoofing, active content, unsafe names, oversized payloads and CSR
     () => detectAttachment(Buffer.from('<svg onload="alert(1)"></svg>')),
     /الأنواع المدعومة/,
   );
+  const brokenJpeg=Buffer.alloc(20,255);brokenJpeg[1]=216;brokenJpeg[19]=217;
+  assert.throws(()=>detectAttachment(brokenJpeg),error=>error.status===422);
 });
 test("2C access is checked again after scanning; a revoked session cannot persist the file", async () => {
   const before = count();
