@@ -12,7 +12,7 @@ const snapshot = db => Object.fromEntries(tables(db).map(t => [t, rows(db, t)]))
 const normalized = value => JSON.parse(JSON.stringify(value));
 const now = "2026-10-01T00:00:00.000Z";
 
-test("phase05 migration: main 26 to identity 43, original data retained, reopen and backup restore", () => {
+test("phase05 migration: main 26 to operations 49, original data retained, reopen and backup restore", () => {
   mkdirSync(dir, { recursive: true });
   // Recreate only the known synthetic fixture, never a user-supplied database.
   let db = new DatabaseSync(":memory:");
@@ -24,6 +24,7 @@ test("phase05 migration: main 26 to identity 43, original data retained, reopen 
   db.prepare(`INSERT INTO requests (id,reference,type,status,customer_id,client_id,assigned_to,department,payload,source,consent,created_at,updated_at) VALUES (1,?,'flight','new',1,1,1,?,?,?,1,?,?)`).run('SYNTHETIC-MIGRATION-001','قسم التذاكر',JSON.stringify({name:'Synthetic customer',phone:'0790000001'}),'website',now,now);
   db.prepare("INSERT INTO request_events (request_id,kind,message,created_at) VALUES (1,'created','Synthetic event',?)").run(now);
   db.prepare("INSERT INTO webhook_deliveries (reference,event,status,created_at) VALUES (?,'booking.created','delivered',?)").run('SYNTHETIC-MIGRATION-001',now);
+  db.prepare("INSERT INTO audit_log(user_name,action,entity,created_at) VALUES('Synthetic actor','historical-event','requests',?)").run(now);
   const before = snapshot(db);
   // VACUUM INTO produces a consistent SQLite snapshot (including committed WAL data).
   // Tests can be rerun: remove only these exact synthetic outputs.
@@ -42,9 +43,12 @@ test("phase05 migration: main 26 to identity 43, original data retained, reopen 
   db.exec(`VACUUM INTO '${backupFile}'`);
   db.close();
   db = openDb(unique);
-  assert.equal(tables(db).length, 43);
+  assert.equal(tables(db).length, 49);
   for (const [table, records] of Object.entries(before)) {
-    assert.equal(rows(db,table).length, records.length, table);
+    if(table==='audit_log') {
+      assert.ok(rows(db,table).length>=records.length);
+      for(const row of rows(db,table).filter(row=>!records.some(old=>old.id===row.id))) {assert.equal(row.action,'db-update');assert.equal(row.entity,'role_definitions');}
+    } else assert.equal(rows(db,table).length, records.length, table);
     for (let i=0;i<records.length;i++) for (const [key,value] of Object.entries(records[i])) assert.equal(rows(db,table)[i][key],value,`${table}.${key}`);
   }
   assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
@@ -60,7 +64,7 @@ test("phase05 migration: main 26 to identity 43, original data retained, reopen 
   assert.deepEqual(normalized(snapshot(db)),normalized(before));
   db.close();
   console.log(
-    `MIGRATION main: 26 -> 43; 6 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`,
+    `MIGRATION main: 26 -> 49; 7 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`,
   );
 });
 
@@ -82,13 +86,18 @@ test('phase05 migration: CRM database retains all business tables when n8n is ad
   db.prepare("INSERT INTO branches (code,name,created_at,updated_at) VALUES ('synthetic-branch','Synthetic branch',?,?)").run(now,now);
   // Recreate the CRM-only predecessor by removing only the n8n table in this synthetic DB.
 
+  db.prepare("INSERT INTO audit_log(user_name,action,entity,created_at) VALUES('Synthetic actor','historical-event','requests',?)").run(now);
   const before=snapshot(db), backup=file.replace('.db','-before.db');
   db.exec(`VACUUM INTO '${backup}'`);
   db.close();
   db = openDb(file);
-  assert.equal(tables(db).length, 43);
+  assert.equal(tables(db).length, 49);
   for (const [table, records] of Object.entries(before)) {
-    if (table === "role_definitions") {
+    if(table==='audit_log') {
+      const current=rows(db,table);assert.ok(current.length>=records.length);
+      for(const old of records)for(const [key,value]of Object.entries(old))assert.equal(current.find(row=>row.id===old.id)[key],value);
+      for(const row of current.filter(row=>!records.some(old=>old.id===row.id))) {assert.equal(row.action,'db-update');assert.equal(row.entity,'role_definitions');}
+    } else if (table === "role_definitions") {
       for (const record of records) {
         const after = db
           .prepare("SELECT * FROM role_definitions WHERE role_key=?")
@@ -111,6 +120,6 @@ test('phase05 migration: CRM database retains all business tables when n8n is ad
   assert.deepEqual(normalized(snapshot(db)),normalized(before));
   db.close();
   console.log(
-    "MIGRATION CRM: 36 -> 43; all 36 table contents retained; backup retained",
+    "MIGRATION CRM: 36 -> 49; all 36 table contents retained; backup retained",
   );
 });

@@ -1,3 +1,4 @@
+import * as TASKS from './lib/tasks-api.js';
 import * as FOLLOW_UPS from './lib/follow-ups.js';
 import http from "node:http";
 import { readFile } from "node:fs/promises";
@@ -252,6 +253,16 @@ export function createApp(options = {}) {
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
 
+  router.get('/api/admin/tasks/options', api(TASKS.taskOptions,{action:'tasks:read'}));
+  router.get('/api/admin/tasks', api(TASKS.listTasks,{action:'tasks:read'}));
+  router.get('/api/admin/tasks/:id', api(TASKS.getTask,{action:'tasks:read'}));
+  router.post('/api/admin/tasks', api(TASKS.createTask,{action:'tasks:write'}));
+  router.patch('/api/admin/tasks/:id', api(TASKS.updateTask,{action:'tasks:write'}));
+  router.post('/api/admin/tasks/:id/comments', api(TASKS.commentTask,{action:'tasks:write'}));
+  router.post('/api/admin/tasks/:id/checklist', api(TASKS.addChecklist,{action:'tasks:write'}));
+  router.patch('/api/admin/task-checklist/:id', api(TASKS.checkItem,{action:'tasks:write'}));
+  router.get('/api/admin/notifications', api(TASKS.notifications,{action:'tasks:read'}));
+  router.post('/api/admin/notifications/:id/read', api(TASKS.readNotification,{action:'tasks:read'}));
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
   router.get('/api/admin/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));

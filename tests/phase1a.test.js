@@ -227,6 +227,7 @@ test('phase1a capability matrix: every route action is enforced for all built-in
       withApiAuthorization(()=>{called=true;},{action:route.action})({user:role.user,res:{writeHead(code){status=code;},end(){}}});
       const grants = role.grants || role.user.permissions;
       const compatibility = {
+        "tasks:read":"requests:read", "tasks:write":"requests:write", "tasks:assign":"requests:write",
         "requests:assign": "requests:write",
         "requests:transfer": "requests:write",
         "requests:approve": "requests:write",
