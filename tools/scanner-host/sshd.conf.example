@@ -1,0 +1,19 @@
+# Review this fragment with the host administrator before installation.
+# Dedicated key-only account, no interactive sessions or arbitrary forwarding.
+# Keep the admin's own access/configuration separate. Validate with sshd -t.
+Match User attachment_scan
+    AuthenticationMethods publickey
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    AllowTcpForwarding local
+    AllowStreamLocalForwarding no
+    PermitOpen 127.0.0.1:3310
+    PermitListen none
+    GatewayPorts no
+    MaxSessions 0
+    PermitTTY no
+    PermitTunnel no
+    X11Forwarding no
+    AllowAgentForwarding no
+    PermitUserRC no
+Match all
