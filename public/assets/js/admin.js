@@ -1,12 +1,12 @@
 /* لوحة إدارة لوريت */
 (() => {
-  'use strict';
+  "use strict";
 
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const root = $('#adminRoot');
+  const root = $("#adminRoot");
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const num = (n) => Number(n || 0).toLocaleString('en-US');
+  const num = (n) => Number(n || 0).toLocaleString("en-US");
   const dt = (iso) => (iso ? new Date(iso).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : '—');
   const day = (iso) => (iso ? new Date(iso).toLocaleDateString('ar-JO') : '—');
 
@@ -58,7 +58,7 @@
   }
 
   /* ---------------- login ---------------- */
-  function renderLogin(message = '') {
+  function renderLogin(message = "") {
     root.innerHTML = `<div class="login-wrap">
       <form class="login-card" id="loginForm" autocomplete="on">
         <div class="brand" style="margin-bottom:16px">
@@ -73,13 +73,14 @@
         <button class="btn btn-primary btn-block" type="submit">دخول</button>
       </form>
     </div>`;
-    $('#loginForm').addEventListener('submit', async (e) => {
+    $("#loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      const button = e.target.querySelector('button');
+      const button = e.target.querySelector("button");
       button.disabled = true;
       try {
         const data = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(Object.fromEntries(fd.entries())) });
+        if (data.mfaChallenge) return renderMfaLogin(data.challenge);
         state.user = data.user;
         boot();
       } catch (err) {
@@ -88,6 +89,75 @@
         button.disabled = false;
       }
     });
+  }
+
+  function renderMfaLogin(challenge) {
+    root.innerHTML = `<div class="login-wrap"><form class="login-card" id="mfaLogin"><h1>التحقق بخطوتين</h1><p>أدخل رمز تطبيق المصادقة أو أحد رموز الاستعادة.</p><label>رمز التحقق<input name="code" autocomplete="one-time-code" dir="ltr" required maxlength="32"></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">تحقق</button><button type="button" class="btn btn-ghost" data-back>رجوع</button></form></div>`;
+    $("[data-back]").onclick = () => renderLogin();
+    $("#mfaLogin").onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.target.querySelector("button");
+      button.disabled = true;
+      try {
+        await api("/api/auth/mfa/verify", {
+          method: "POST",
+          body: JSON.stringify({
+            challenge,
+            code: event.target.elements.code.value,
+          }),
+        });
+        await boot();
+      } catch (error) {
+        $(".form-status", event.target).textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+  }
+  function renderMfaEnrollment() {
+    root.innerHTML = `<div class="login-wrap"><div class="login-card"><h1>تأمين حساب المسؤول</h1><p>يلزم ربط تطبيق مصادقة قبل استخدام الصلاحيات الإدارية. لن تظهر بيانات العمل قبل إكمال التحقق.</p><form id="mfaSetup"><label>كلمة المرور الحالية<input name="password" type="password" autocomplete="current-password" required></label><button class="btn btn-primary">بدء الربط</button><p class="form-status is-error" role="status"></p></form><div id="mfaConfirmSlot"></div><button class="btn btn-ghost" data-mfa-logout>خروج</button></div></div>`;
+    $("[data-mfa-logout]").onclick = async () => {
+      await api("/api/auth/logout", { method: "POST" });
+      renderLogin();
+    };
+    $("#mfaSetup").onsubmit = async (event) => {
+      event.preventDefault();
+      const button = event.target.querySelector("button");
+      button.disabled = true;
+      try {
+        const data = await api("/api/auth/mfa/setup", {
+          method: "POST",
+          body: JSON.stringify({
+            password: event.target.elements.password.value,
+          }),
+        });
+        event.target.remove();
+        $("#mfaConfirmSlot").innerHTML =
+          `<p>في تطبيق المصادقة اختر إضافة مفتاح يدوي باسم Laurette. احفظه داخل التطبيق فقط:</p><code dir="ltr" style="overflow-wrap:anywhere">${esc(data.secret)}</code><form id="mfaConfirm"><label>رمز التطبيق<input name="code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" required></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">تفعيل والتحقق</button></form>`;
+        $("#mfaConfirm").onsubmit = async (event) => {
+          event.preventDefault();
+          const button = event.target.querySelector("button");
+          button.disabled = true;
+          try {
+            const saved = await api("/api/auth/mfa/confirm", {
+              method: "POST",
+              body: JSON.stringify({ code: event.target.elements.code.value }),
+            });
+            $("#mfaConfirmSlot").innerHTML =
+              `<h2>رموز الاستعادة — تظهر مرة واحدة</h2><p>احفظها في مكان آمن منفصل. كل رمز يستخدم مرة واحدة لاستعادة الدخول عند فقد الهاتف.</p><pre dir="ltr" style="user-select:all">${saved.recoveryCodes.map(esc).join("\n")}</pre><button class="btn btn-primary" data-mfa-done>حفظت الرموز — متابعة</button>`;
+            $("[data-mfa-done]").onclick = boot;
+          } catch (error) {
+            $(".form-status", event.target).textContent = error.message;
+          } finally {
+            button.disabled = false;
+          }
+        };
+      } catch (error) {
+        $(".form-status", event.target).textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
   }
 
   /* ---------------- shell ---------------- */
@@ -124,7 +194,10 @@
       renderRequiredPasswordChange();
       return;
     }
+    if (state.user.mfaRequired && !state.user.mfaVerified)
+      return renderMfaEnrollment();
     const sections = visibleSections();
+    if(!sections.length){root.innerHTML='<div class="login-wrap"><div class="login-card"><h1>لا توجد صلاحيات مفعلة</h1><p>اطلب من المسؤول تعيين دور مناسب لحسابك.</p><button data-no-access-logout>خروج</button></div></div>'; $('[data-no-access-logout]').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});renderLogin();};return;}
     if (!sections.find((s) => s.id === state.section)) state.section = sections[0].id;
     root.innerHTML = `<div class="admin-shell">
       <aside class="admin-side">
@@ -144,20 +217,49 @@
         <div class="admin-top">
           <h1 id="pageTitle">${esc(sections.find((s) => s.id === state.section)?.label || '')}</h1>
           <span class="spacer"></span>
-          <span class="admin-user">${esc(state.user.department || '')}</span>
+          <label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
           <a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">عرض الموقع</a>
         </div>
         <div id="view"></div>
       </main>
     </div>`;
 
-    root.addEventListener('click', onNavClick);
+    root.removeEventListener("click", onNavClick);
+    root.addEventListener("click", onNavClick);
     $('#logoutBtn').addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' });
       state.user = null;
       renderLogin();
     });
     loadSection();
+    api("/api/auth/memberships")
+      .then((data) => {
+        if (data.memberships.length < 2) return;
+        $("#membershipSlot").innerHTML =
+          `جهة العمل <select aria-label="جهة العمل" id="staffContext"><option value="">الجهة الأساسية</option>${data.memberships
+            .filter((m) => !m.is_primary)
+            .map(
+              (m) =>
+                `<option value="${m.id}" ${Number(state.user.membershipId) === m.id ? "selected" : ""}>${esc([m.branch_name, m.department_name].filter(Boolean).join(" — "))}</option>`,
+            )
+            .join("")}</select>`;
+        $("#staffContext").onchange = async (event) => {
+          event.target.disabled = true;
+          try {
+            await api("/api/auth/context", {
+              method: "POST",
+              body: JSON.stringify({
+                membershipId: event.target.value || null,
+              }),
+            });
+            await boot();
+          } catch (error) {
+            toast(error.message, "bad");
+            event.target.disabled = false;
+          }
+        };
+      })
+      .catch(() => {});
   }
 
   function renderRequiredPasswordChange() {
@@ -168,7 +270,7 @@
         <h1>غيّر كلمة المرور المؤقتة</h1>
         <p class="muted" style="font-size:13px">يلزم تعيين كلمة مرور جديدة قبل استخدام لوحة الإدارة.</p>
         <div class="field"><label for="currentPassword">كلمة المرور الحالية</label><input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" dir="ltr" required></div>
-        <div class="field"><label for="newPassword">كلمة المرور الجديدة</label><input id="newPassword" name="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" dir="ltr" required></div>
+        <div class="field"><label for="newPassword">كلمة المرور الجديدة</label><input id="newPassword" name="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" dir="ltr" required></div>
         <div class="field"><label for="confirmPassword">تأكيد كلمة المرور الجديدة</label><input id="confirmPassword" name="confirmPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" dir="ltr" required></div>
         <p class="form-status is-error" id="passwordChangeError" role="status" aria-live="polite"></p>
         <button class="btn btn-primary btn-block" type="submit">حفظ كلمة المرور</button>
@@ -870,17 +972,33 @@
 
   /* ---------------- users / settings / audit / assistant ---------------- */
   async function renderUsers() {
-    const data = await api('/api/admin/users');
-    $('#view').innerHTML = `
+    const data = await api("/api/admin/users");
+    $("#view").innerHTML = `
       <div class="toolbar"><button class="btn btn-primary btn-sm" data-new-user>+ موظف جديد</button></div>
       <div class="admin-card"><div class="admin-card-body" style="padding:0">
         <table class="admin-table"><thead><tr><th>الاسم</th><th>اسم الدخول</th><th>الدور</th><th>الفرع / القسم</th><th>آخر دخول</th><th>نشط</th><th></th></tr></thead>
-        <tbody>${data.users.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td dir="ltr">${esc(u.username)}</td>
+        <tbody>${data.users
+          .map(
+            (
+              u,
+            ) => `<tr><td><b>${esc(u.name)}</b></td><td dir="ltr">${esc(u.username)}</td>
           <td>${esc(u.role_name || { admin: 'مدير', manager: 'مدير قسم', agent: 'موظف' }[u.role] || u.role)}</td>
-          <td>${esc([u.branch_name, u.department_name || u.department].filter(Boolean).join(' · ') || '—')}</td><td>${dt(u.last_login_at)}</td><td>${u.active ? '✓' : '✕'}</td>
-          <td class="btn-row"><button class="btn btn-ghost btn-sm" data-edit-user="${u.id}">تعديل</button>
-          ${u.active ? `<button class="btn btn-danger btn-sm" data-toggle-user="${u.id}" data-active="0">تعطيل</button>` : `<button class="btn btn-ghost btn-sm" data-toggle-user="${u.id}" data-active="1">تنشيط</button>`}</td></tr>`).join('')}</tbody></table>
+          <td>${esc([u.branch_name, u.department_name || u.department].filter(Boolean).join(' · ') || '—')}</td><td>${dt(u.last_login_at)}</td><td>${u.active ? "✓" : "✕"}</td>
+          <td class="btn-row"><button class="btn btn-ghost btn-sm" data-user-profile="${u.id}">الملف الوظيفي</button><button class="btn btn-ghost btn-sm" data-user-memberships="${u.id}">تفويضات العمل</button><button class="btn btn-ghost btn-sm" data-edit-user="${u.id}">تعديل</button>
+          ${u.active ? `<button class="btn btn-danger btn-sm" data-toggle-user="${u.id}" data-active="0">تعطيل</button>` : `<button class="btn btn-ghost btn-sm" data-toggle-user="${u.id}" data-active="1">تنشيط</button>`}</td></tr>`,
+          )
+          .join("")}</tbody></table>
       </div></div>`;
+    $$("[data-user-profile]").forEach(
+      (button) =>
+        (button.onclick = () =>
+          openEmployeeProfile(Number(button.dataset.userProfile), data)),
+    );
+    $$("[data-user-memberships]").forEach(
+      (button) =>
+        (button.onclick = () =>
+          openMemberships(Number(button.dataset.userMemberships), data)),
+    );
     $('[data-new-user]')?.addEventListener('click', () => openUserForm(null, data));
     $$('[data-edit-user]').forEach((b) => b.addEventListener('click', () => openUserForm(data.users.find((u) => u.id === Number(b.dataset.editUser)), data)));
     $$('[data-toggle-user]').forEach((b) => b.addEventListener('click', async () => {
@@ -888,13 +1006,112 @@
     }));
   }
 
+  async function openEmployeeProfile(id, organization) {
+    try {
+      const { profile } = await api(`/api/admin/users/${id}/profile`);
+      openDrawer(
+        `<div class="drawer-head"><h2>الملف الوظيفي</h2><button data-close-drawer>×</button></div><form id="employeeProfile" class="stack"><label>الرقم الوظيفي<input name="employee_no" value="${esc(profile.employee_no)}" required maxlength="40"></label><label>المسمى<input name="job_title" value="${esc(profile.job_title)}" maxlength="100"></label><label>البريد المهني<input name="email" type="email" value="${esc(profile.email)}"></label><label>تاريخ التعيين<input name="hire_date" type="date" value="${esc(profile.hire_date || "")}"></label><label>المدير المباشر<select name="manager_id"><option value="">غير محدد</option>${organization.users
+          .filter((u) => u.id !== id)
+          .map(
+            (u) =>
+              `<option value="${u.id}" ${u.id === profile.manager_id ? "selected" : ""}>${esc(u.name)}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label><label>سبب التعديل<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error"></p><button class="btn btn-primary">حفظ</button></form>`,
+      );
+      $("#employeeProfile").onsubmit = async (event) => {
+        event.preventDefault();
+        const button = event.target.querySelector("button");
+        button.disabled = true;
+        try {
+          const body = Object.fromEntries(new FormData(event.target));
+          body.manager_id = body.manager_id ? Number(body.manager_id) : null;
+          await api(`/api/admin/users/${id}/profile`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          closeDrawer();
+          await renderUsers();
+        } catch (error) {
+          $(".form-status", event.target).textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function openMemberships(id, organization) {
+    try {
+      const { memberships } = await api(`/api/admin/users/${id}/memberships`);
+      openDrawer(
+        `<div class="drawer-head"><h2>تفويضات العمل</h2><button data-close-drawer>×</button></div><p>كل تفويض يحدد جهة عمل وصلاحيات مستقلة. يتغير الوصول فور الإلغاء، ويلزم تسجيل الدخول مجددًا بعد أي تعديل.</p><ul>${memberships.map((m) => `<li>${esc([m.branch_name, m.department_name, m.role_name].filter(Boolean).join(" — "))} — ${m.is_primary ? "أساسي" : m.active ? "فعال" : "معطل"} ${m.is_primary ? "" : `<button type="button" data-member-id="${m.id}" data-next-active="${m.active ? "0" : "1"}">${m.active ? "تعطيل" : "تفعيل"}</button>`}</li>`).join("")}</ul><form id="membershipForm" class="stack"><label>الفرع<select name="branchId" required>${organization.branches.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join("")}</select></label><label>القسم<select name="departmentId"><option value="">غير محدد</option>${organization.departments.map((d) => `<option value="${d.id}">${esc(d.name)}</option>`).join("")}</select></label><label>الدور<select name="roleKey" required>${organization.roles
+          .filter((r) => r.data_scope !== "organization")
+          .map(
+            (r) => `<option value="${esc(r.role_key)}">${esc(r.name)}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label><label>سبب التفويض<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error"></p><button class="btn btn-primary">إضافة تفويض</button></form>`,
+      );
+      $$("[data-member-id]").forEach(
+        (button) =>
+          (button.onclick = async () => {
+            const reason = prompt("سبب تعديل التفويض");
+            if (!reason) return;
+            button.disabled = true;
+            try {
+              await api(
+                `/api/admin/users/${id}/memberships/${button.dataset.memberId}`,
+                {
+                  method: "PATCH",
+                  body: JSON.stringify({
+                    active: button.dataset.nextActive === "1",
+                    reason,
+                  }),
+                },
+              );
+              closeDrawer();
+              await renderUsers();
+            } catch (error) {
+              toast(error.message, "bad");
+              button.disabled = false;
+            }
+          }),
+      );
+      $("#membershipForm").onsubmit = async (event) => {
+        event.preventDefault();
+        const button = event.target.querySelector("button");
+        button.disabled = true;
+        try {
+          await api(`/api/admin/users/${id}/memberships`, {
+            method: "POST",
+            body: JSON.stringify(
+              Object.fromEntries(new FormData(event.target)),
+            ),
+          });
+          closeDrawer();
+          await renderUsers();
+        } catch (error) {
+          $(".form-status", event.target).textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+
   function openUserForm(user, organization) {
     openDrawer(`
-      <div class="drawer-head"><div><h2>${user ? 'تعديل موظف' : 'موظف جديد'}</h2></div><button class="drawer-close" data-close-drawer>×</button></div>
+      <div class="drawer-head"><div><h2>${user ? "تعديل موظف" : "موظف جديد"}</h2></div><button class="drawer-close" data-close-drawer>×</button></div>
       <form id="userForm" class="stack">
         <div class="form-grid">
           <div class="field"><label>الاسم</label><input data-key="name" value="${esc(user?.name || '')}"></div>
-          ${user ? '' : '<div class="field"><label>اسم الدخول (لاتيني)</label><input data-key="username" dir="ltr"></div>'}
+          ${user ? '' : '<div class="field"><label>اسم المستخدم</label><input data-key="username" dir="auto" required maxlength="32" aria-describedby="username-help"><small id="username-help">من 3 إلى 32 حرفًا عربيًا أو إنجليزيًا أو رقمًا. يمكن استخدام . و _ و - دون مسافات. مثال: أحمد_01</small></div>'}
           <div class="field"><label>الدور الأساسي</label><select data-key="role">${[['agent', 'موظف'], ['manager', 'مدير قسم'], ['admin', 'مدير']].map(([v, l]) => `<option value="${v}" ${user?.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
           <div class="field"><label>قالب الصلاحيات</label><select data-key="roleKey"><option value="">استخدم صلاحيات الدور الأساسي</option>
             ${organization.roles.map((role) => `<option value="${esc(role.role_key)}" ${user?.role_key === role.role_key ? 'selected' : ''}>${esc(role.name)}</option>`).join('')}</select></div>
@@ -902,9 +1119,9 @@
             ${organization.branches.map((branch) => `<option value="${branch.id}" ${String(user?.branch_id || '') === String(branch.id) ? 'selected' : ''}>${esc(branch.name)}</option>`).join('')}</select></div>
           <div class="field"><label>القسم</label><select data-key="departmentId"><option value="">غير محدد</option>
             ${organization.departments.map((department) => `<option value="${department.id}" ${String(user?.department_id || '') === String(department.id) ? 'selected' : ''}>${esc(department.name)}${department.branch_id ? ' — مرتبط بفرع' : ''}</option>`).join('')}</select></div>
-          <div class="field"><label>${user ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'}</label><input data-key="password" type="password" dir="ltr" autocomplete="new-password"></div>
+          <div class="field"><label>${user ? "كلمة مرور جديدة (اختياري)" : "كلمة المرور"}</label><input data-key="password" type="password" dir="ltr" autocomplete="new-password"></div>
         </div>
-        <p class="field-hint">10 أحرف على الأقل، تحتوي حرفًا ورقمًا. الموظف مطالب بتغييرها عند أول دخول.</p>
+        <p class="field-hint">12–128 حرفًا. يمكن استخدام عبارة مرور عربية طويلة. الموظف مطالب بتغييرها عند أول دخول.</p>
         <p class="form-status is-error" data-form-error></p>
         <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ</button><button class="btn btn-ghost" type="button" data-close-drawer>إلغاء</button></div>
       </form>`);
@@ -926,20 +1143,40 @@
 
   /* ---------------- organization and access profiles ---------------- */
   async function renderOrganization() {
-    const data = await api('/api/admin/organization');
+    const data = await api("/api/admin/organization");
     const scopeLabels = { organization: 'كل المؤسسة', branch: 'الفرع', department: 'القسم', assigned: 'الطلبات المسندة' };
     const permissionLabels = {
-      'overview:read': 'نظرة عامة', 'requests:read': 'عرض الطلبات', 'requests:write': 'تحديث الطلبات',
-      'customers:read': 'عرض العملاء', 'customers:write': 'تعديل العملاء', 'programs:read': 'عرض البرامج',
-      'programs:write': 'إدارة البرامج', 'content:write': 'إدارة المحتوى', 'visa:write': 'إدارة التأشيرات',
-      'kb:write': 'قاعدة المعرفة', 'audit:read': 'سجل العمليات', 'reports:read': 'التقارير',
-      'users:write': 'إدارة الموظفين', 'settings:write': 'الإعدادات',
-      'organization:read': 'عرض الهيكل التنظيمي', 'organization:write': 'إدارة الهيكل والأدوار',
+      "overview:read": "نظرة عامة",
+      "requests:read": "عرض الطلبات",
+      "requests:write": "تحديث الطلبات",
+      "customers:read": "عرض العملاء",
+      "customers:write": "تعديل العملاء",
+      "programs:read": "عرض البرامج",
+      "programs:write": "إدارة البرامج",
+      "content:write": "إدارة المحتوى",
+      "visa:write": "إدارة التأشيرات",
+      "kb:write": "قاعدة المعرفة",
+      "audit:read": "سجل العمليات",
+      "reports:read": "التقارير",
+      "requests:assign": "إسناد الطلبات",
+      "requests:transfer": "تحويل الطلبات",
+      "requests:approve": "اعتماد التأكيد",
+      "reports:export": "تصدير التقارير",
+      "audit:export": "تصدير سجل التدقيق",
+      "programs:delete": "حذف البرامج المسموح",
+      "content:delete": "حذف المحتوى",
+      "visa:delete": "حذف محتوى التأشيرات",
+      "kb:delete": "حذف المعرفة",
+      "users:admin": "إدارة صلاحيات المسؤولين",
+      "users:write": "إدارة الموظفين",
+      "settings:write": "الإعدادات",
+      "organization:read": "عرض الهيكل التنظيمي",
+      "organization:write": "إدارة الهيكل والأدوار",
     };
-    $('#view').innerHTML = `
+    $("#view").innerHTML = `
       <div class="admin-card mb-3">
         <div class="admin-card-head"><h2>الفروع والأقسام</h2></div>
-        <div class="admin-card-body">
+        <div class="admin-card-body"><div id="unitControls"></div>
           <div class="form-grid">
             <form id="branchForm" class="stack">
               <h3>إضافة فرع</h3>
@@ -986,6 +1223,48 @@
           </div></div>
         </div>
       </div>`;
+    if ($("#unitControls") && hasPermission("organization:write")) {
+      for (const [kind, units] of [
+        ["branches", data.branches],
+        ["departments", data.departments],
+      ]) {
+        const box = document.createElement("div");
+        box.innerHTML = `<h3>${kind === "branches" ? "تعديل الفروع" : "تعديل الأقسام"}</h3>${units.map((unit) => `<p>${esc(unit.name)} — ${unit.active ? "نشط" : "معطل"} <button type="button" data-unit="${kind}/${unit.id}">تعديل</button></p>`).join("")}`;
+        $("#unitControls").append(box);
+        $$("[data-unit]", box).forEach(
+          (button) =>
+            (button.onclick = () => {
+              const unit = units.find((u) =>
+                button.dataset.unit.endsWith("/" + u.id),
+              );
+              openDrawer(
+                `<h2>تعديل الجهة</h2><form id="unitForm" class="stack"><label>الاسم<input name="name" value="${esc(unit.name)}" required maxlength="80"></label><label>الحالة<select name="active"><option value="1" ${unit.active ? "selected" : ""}>نشط</option><option value="0" ${unit.active ? "" : "selected"}>معطل</option></select></label><label>السبب<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error"></p><button class="btn btn-primary">حفظ</button><button type="button" data-close-drawer>إلغاء</button></form>`,
+              );
+              $("#unitForm").onsubmit = async (event) => {
+                event.preventDefault();
+                const values = Object.fromEntries(new FormData(event.target)),
+                  save = event.target.querySelector("button");
+                save.disabled = true;
+                try {
+                  await api("/api/admin/" + button.dataset.unit, {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                      ...values,
+                      active: values.active === "1",
+                    }),
+                  });
+                  closeDrawer();
+                  await renderOrganization();
+                } catch (error) {
+                  $(".form-status", event.target).textContent = error.message;
+                } finally {
+                  save.disabled = false;
+                }
+              };
+            }),
+        );
+      }
+    }
     $('#branchForm')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const body = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -1225,11 +1504,29 @@
   }
 
   async function renderAudit() {
-    const data = await api('/api/admin/audit');
-    $('#view').innerHTML = `<div class="admin-card"><div class="admin-card-body" style="padding:0">
-      <table class="admin-table"><thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>العنصر</th><th>IP</th></tr></thead>
-      <tbody>${data.entries.map((e) => `<tr><td>${dt(e.created_at)}</td><td>${esc(e.user_name || '—')}</td><td>${esc(e.action)}</td><td>${esc(e.entity || '')} ${esc(e.entity_id || '')}</td><td dir="ltr">${esc(e.ip || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">لا سجلات</td></tr>'}</tbody></table>
-    </div></div>`;
+    const data = await api("/api/admin/audit");
+    $("#view").innerHTML =
+      `<div class="admin-card"><div class="admin-card-head"><h2>سجل التغييرات</h2>${hasPermission("audit:export") ? '<button class="btn btn-ghost" data-audit-export>تنزيل نسخة موقعة (آخر 1000 سجل)</button>' : ""}</div><div class="admin-card-body"><table class="admin-table"><thead><tr><th>الوقت</th><th>المستخدم</th><th>الإجراء</th><th>العنصر</th><th>التفاصيل</th></tr></thead><tbody>${data.entries.map((e) => `<tr><td>${dt(e.created_at)}</td><td>${esc(e.user_name || "—")}</td><td>${esc(e.action)}</td><td>${esc(e.entity || "")} ${esc(e.entity_id || "")}</td><td><details><summary>${esc(e.reason || "عرض")}</summary><p>قبل</p><pre dir="ltr" style="white-space:pre-wrap">${esc(e.before_json || "—")}</pre><p>بعد</p><pre dir="ltr" style="white-space:pre-wrap">${esc(e.after_json || e.meta || "—")}</pre></details></td></tr>`).join("") || '<tr><td colspan="5">لا سجلات</td></tr>'}</tbody></table></div></div>`;
+    $("[data-audit-export]")?.addEventListener("click", async (event) => {
+      event.target.disabled = true;
+      try {
+        const exported = await api("/api/admin/audit/export");
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(exported, null, 2)], {
+            type: "application/json",
+          }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "laurette-audit-signed.json";
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) {
+        toast(error.message, "bad");
+      } finally {
+        event.target.disabled = false;
+      }
+    });
   }
 
   async function renderAssistant() {

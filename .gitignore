@@ -23,3 +23,8 @@ Thumbs.db
 
 # Local phase 0.5 backups and migration rehearsals (never upload).
 /data/phase05-migration/
+
+# Local database migration backups (may contain private records; never upload).
+/data/backups/
+
+/data/phase1b-testing/

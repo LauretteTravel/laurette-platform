@@ -1,14 +1,15 @@
-import test, { before, after } from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync, rmSync } from 'node:fs';
-import { randomBytes, createHmac } from 'node:crypto';
-import { createApp } from '../server.js';
-import * as API from '../lib/api.js';
+import { staffLogin } from "./helpers/staff-auth.mjs";
+import test, { before, after } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, rmSync } from "node:fs";
+import { randomBytes, createHmac } from "node:crypto";
+import { createApp } from "../server.js";
+import * as API from "../lib/api.js";
 import { enqueueWhatsAppNotice, processWhatsAppOutbox } from '../lib/whatsapp.js';
 
 const file = `data/test-phase05-${randomBytes(6).toString('hex')}.db`;
 let app, base, admin, branch, department, staff, actor;
-const password = 'Phase05-Temporary-Password42';
+const password = "Phase05-Temporary-Password42";
 async function api(path, { method = 'GET', cookie, body, origin = base, headers = {} } = {}) {
   const res = await fetch(base + path, { method, headers: {
     ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}),
@@ -16,17 +17,15 @@ async function api(path, { method = 'GET', cookie, body, origin = base, headers 
   }, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
 }
+const changedPasswords = new Map();
 async function login(username) {
-  const first = await api('/api/auth/login', { method: 'POST', body: { username, password } });
-  assert.equal(first.status, 200);
-  if (!first.data.user.mustChange) return first.cookie;
-  assert.equal((await api('/api/admin/users', { cookie: first.cookie })).status, 403);
-  assert.equal((await api('/api/auth/change-password', { method: 'POST', cookie: first.cookie,
-    body: { currentPassword: password, newPassword: password + '-Changed' } })).status, 200);
-  assert.equal((await api('/api/admin/users', { cookie: first.cookie })).status, 401);
-  const next = await api('/api/auth/login', { method: 'POST', body: { username, password: password + '-Changed' } });
-  assert.equal(next.status, 200);
-  return next.cookie;
+  const result = await staffLogin(
+    base,
+    username,
+    changedPasswords.get(username) || password,
+  );
+  changedPasswords.set(username, result.password);
+  return result.cookie;
 }
 async function role(key, permissions, dataScope = 'branch', cookie = admin) {
   return api('/api/admin/roles', { method: 'POST', cookie,
@@ -80,6 +79,7 @@ test('phase05: department update uses the correct alias and cannot escape its sc
 test('phase05: users writer cannot reset or edit a more privileged account', async () => {
   const id = app.db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get().id;
   app.db.prepare('UPDATE users SET branch_id=? WHERE id=?').run(branch, id);
+  admin = await login("laurette");
   for (const body of [{ password: 'Takeover-Password42' }, { active: false }, { name: 'Takeover' }]) {
     assert.equal((await api(`/api/admin/users/${id}`, { method: 'PATCH', cookie: actor, body })).status, 403);
   }
@@ -144,7 +144,7 @@ test('phase05: outbox coexists with n8n, deduplicates, retries and delivers via 
   } finally { for (const [k,v] of Object.entries(previous)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
 });
 
- test('phase05: all statically registered API handlers exist; organization and transfer routes respond', async () => {
+test('phase05: all statically registered API handlers exist; organization and transfer routes respond', async () => {
   const source = readFileSync('server.js','utf8');
   const handlers = [...source.matchAll(/\bAPI\.([A-Za-z0-9_]+)/g)].map(match => match[1]);
   for (const name of new Set(handlers)) assert.equal(typeof API[name], 'function', name);

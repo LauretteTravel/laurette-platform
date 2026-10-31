@@ -5,7 +5,7 @@
   "type": "module",
   "description": "منصة لوريت للسياحة والسفر — خادم Node بلا اعتماديات خارجية + SQLite + واجهة عربية RTL",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "scripts": {
     "start": "node server.js",

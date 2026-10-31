@@ -1,21 +1,40 @@
-import test, { before, after } from 'node:test';
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createApp } from '../server.js';
+import test, { before, after } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createApp } from "../server.js";
 import { createSession, hashPassword } from '../lib/auth.js';
 import { withApiAuthorization } from '../lib/api-authorization.js';
 
 let app, db, base, branches, departments, admin, none, temporary, receiver, branchActor;
-const now='2026-10-31T00:00:00.000Z';
-const permissions=['requests:read','requests:write','customers:read','overview:read'];
-const hash=hashPassword('Synthetic-Phase1a-Password42');
-let counter=0;
-function actor(scope, { branch=branches[0], department=departments[0], perms=permissions, legacy, mustChange=false }={}) {
-  const username=`phase1a_${++counter}`;
-  const key=legacy?null:username;
+const now = "2026-10-31T00:00:00.000Z";
+const permissions = [
+  "requests:transfer",
+  "requests:assign",
+  "requests:approve",
+  "requests:read",
+  "requests:write",
+  "customers:read",
+  "overview:read",
+];
+const hash = hashPassword("Synthetic-Phase1a-Password42");
+let counter = 0;
+function actor(
+  scope,
+  { branch=branches[0], department=departments[0], perms=permissions, legacy, mustChange=false }={},
+) {
+  const username = `phase1a_${++counter}`;
+  const key = legacy ? null : username;
   if(key) db.prepare('INSERT INTO role_definitions (role_key,name,base_role,data_scope,permissions,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').run(key,key,'agent',scope,JSON.stringify(perms),now,now);
   const id=Number(db.prepare('INSERT INTO users (username,name,role,role_key,branch_id,department_id,password_hash,password_salt,must_change,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)').run(username,username,legacy||'agent',key,branch,department,hash.hash,hash.salt,Number(mustChange),now).lastInsertRowid);
-  return {id,cookie:'lt_session='+createSession(db,id,'127.0.0.1','test').token,branch,department,key};
+  return {
+    id,
+    cookie:
+      "lt_session=" +
+      createSession(db, id, "127.0.0.1", "test", { mfaVerified: true }).token,
+    branch,
+    department,
+    key,
+  };
 }
 function customer() { return Number(db.prepare('INSERT INTO customers (name,phone,created_at,updated_at) VALUES (?,?,?,?)').run('Synthetic customer',`+96279${String(++counter).padStart(7,'0')}`,now,now).lastInsertRowid); }
 function request(owner, { branch=owner.branch, department=owner.department, customerId=customer(), ownerField='assigned_to' }={}) {
@@ -40,7 +59,9 @@ before(async()=>{
   receiver=actor('assigned',{branch:branches[1],department:departments[0]});
   branchActor=actor('branch');
 });
-after(async()=>{await app?.close();});
+after(async () => {
+  await app?.close();
+});
 
 for(const scope of ['branch','department','assigned']) test(`phase1a SQL: ${scope} can update, transfer and read its customer; outside records remain unchanged`,async()=>{
   const user=actor(scope), own=request(user);
@@ -80,12 +101,15 @@ test('phase1a legacy administrator still updates requests, reads customers and c
   assert.equal((await call(`/api/admin/requests/${own.id}/transfers`,{method:'POST',cookie:admin.cookie,body:{branchId:receiver.branch,departmentId:receiver.department,userId:receiver.id}})).status,201);
 });
 
-test('phase1a missing scope never defaults to global record access',async()=>{
-  const own=request(branchActor);
-  for(const [scope,opts] of [['branch',{branch:null}],['department',{department:null}],['assigned',{}]]) {
-    const user=actor(scope,opts);
-    for(const [method,path,body] of [['PATCH',`/api/admin/requests/${own.id}`,{note:'denied'}],['POST',`/api/admin/requests/${own.id}/transfers`,{}],['GET',`/api/admin/customers/${own.customerId}`]])
-      assert.equal((await call(path,{method,cookie:user.cookie,body})).status,404);
+test('phase1a missing scope never defaults to global record access', async () => {
+  const own = request(branchActor);
+  for (const [scope, opts] of [['branch',{branch:null}],['department',{department:null}],['assigned',{}]]) {
+    const user = actor(scope, opts);
+    for (const [method, path, body] of [['PATCH',`/api/admin/requests/${own.id}`,{note:'denied'}],['POST',`/api/admin/requests/${own.id}/transfers`,{}],['GET',`/api/admin/customers/${own.customerId}`]])
+      assert.equal(
+        (await call(path, { method, cookie: user.cookie, body })).status,
+        scope === "assigned" ? 404 : 401,
+      );
   }
 });
 
@@ -190,20 +214,36 @@ test('phase1a central authorization denies before a handler even if that handler
   withApiAuthorization(()=>hits++)({user:null,res:res()});assert.equal(hits,3);
 });
 
- test('phase1a capability matrix: every route action is enforced for all built-in and legacy roles',()=>{
+test('phase1a capability matrix: every route action is enforced for all built-in and legacy roles', () => {
   const routes=app.routeManifest.filter(r=>r.pattern.startsWith('/api/admin/'));
   const roles=db.prepare("SELECT role_key,permissions FROM role_definitions WHERE role_key IN ('admin','branch_manager','department_manager','sales_agent','service_agent') ORDER BY role_key").all().map(r=>({name:r.role_key,user:{role:'agent',permissions:JSON.parse(r.permissions)}}));
   const legacy={admin:['*'],manager:['requests:read','requests:write','customers:read','customers:write','programs:read','programs:write','content:write','visa:write','kb:write','audit:read','overview:read','reports:read'],agent:['requests:read','requests:write','customers:read','customers:write','programs:read','overview:read','kb:write']};
   for(const [role,grants] of Object.entries(legacy)) roles.push({name:'legacy '+role,user:{role},grants});
-  let cases=0;
-  for(const role of roles) for(const route of routes){
-    let called=false,status=null;
-    withApiAuthorization(()=>{called=true;},{action:route.action})({user:role.user,res:{writeHead(code){status=code;},end(){}}});
-    const grants=role.grants||role.user.permissions;
-    const allowed=grants.includes('*')||grants.includes(route.action);
-    assert.equal(called,allowed,role.name+' '+route.method+' '+route.pattern);
-    if(!allowed) assert.equal(status,403);cases++;
-  }
-  assert.equal(roles.length,8);
+  let cases = 0;
+  for (const role of roles)
+    for (const route of routes) {
+      let called = false,
+        status = null;
+      withApiAuthorization(()=>{called=true;},{action:route.action})({user:role.user,res:{writeHead(code){status=code;},end(){}}});
+      const grants = role.grants || role.user.permissions;
+      const compatibility = {
+        "requests:assign": "requests:write",
+        "requests:transfer": "requests:write",
+        "requests:approve": "requests:write",
+        "reports:export": "reports:read",
+        "programs:delete": "programs:write",
+        "content:delete": "content:write",
+        "visa:delete": "visa:write",
+        "kb:delete": "kb:write",
+      };
+      const allowed =
+        grants.includes("*") ||
+        grants.includes(route.action) ||
+        Boolean(role.grants && grants.includes(compatibility[route.action]));
+      assert.equal(called,allowed,role.name+' '+route.method+' '+route.pattern);
+      if (!allowed) assert.equal(status, 403);
+      cases++;
+    }
+  assert.equal(roles.length, 8);
   console.log('PHASE1A CAPABILITY MATRIX: '+roles.length+' roles x '+routes.length+' routes = '+cases+' decisions');
- });
+});
