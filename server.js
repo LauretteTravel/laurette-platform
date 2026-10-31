@@ -18,6 +18,7 @@ import * as API from './lib/api.js';
 import * as CLIENT_API from './lib/client-api.js';
 import * as WHATSAPP from './lib/whatsapp.js';
 import { COOKIE } from './lib/api.js';
+import { withApiAuthorization } from './lib/api-authorization.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
 import { localizeHtml, dictionary } from './lib/i18n.js';
 
@@ -184,20 +185,23 @@ export function createApp(options = {}) {
     '/api/client/auth/login': { max: 12, window: 600_000 },
   };
 
-  const api = (handler, { auth = false, action = null, limit = null } = {}) => async (ctx) => {
-    if (limit) {
-      const rule = POST_LIMITS[limit];
-      if (rule) {
-        const hit = limiter.hit(`${limit}|${ctx.ip}`, rule.max, rule.window);
-        if (!hit.allowed) {
-          ctx.res.setHeader('retry-after', String(hit.retryAfter));
-          return json(ctx.res, 429, { ok: false, message: 'عدد المحاولات كبير. حاول لاحقًا.' });
+  const api = (handler, { auth = false, action = null, limit = null } = {}) => {
+    const authorized = withApiAuthorization(handler, { auth, action });
+    const limited = async (ctx) => {
+      if (limit) {
+        const rule = POST_LIMITS[limit];
+        if (rule) {
+          const hit = limiter.hit(`${limit}|${ctx.ip}`, rule.max, rule.window);
+          if (!hit.allowed) {
+            ctx.res.setHeader('retry-after', String(hit.retryAfter));
+            return json(ctx.res, 429, { ok: false, message: 'عدد المحاولات كبير. حاول لاحقًا.' });
+          }
         }
       }
-    }
-    if (auth && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'يلزم تسجيل الدخول' });
-    if (action && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'يلزم تسجيل الدخول' });
-    return handler(ctx);
+      return authorized(ctx);
+    };
+    limited.requiredAction = action;
+    return limited;
   };
 
   router.post('/api/auth/login', api(API.login, { limit: '/api/auth/login' }));
@@ -238,10 +242,11 @@ export function createApp(options = {}) {
   router.patch('/api/admin/customers/:id', api(API.updateCustomer, { action: 'customers:write' }));
 
   for (const resource of ['programs', 'offers', 'news', 'articles', 'faq', 'visa', 'kb', 'destinations', 'reviews']) {
-    router.get(`/api/admin/${resource}`, (ctx) => API.listResource(ctx, resource));
-    router.post(`/api/admin/${resource}`, (ctx) => API.createResource(ctx, resource));
-    router.patch(`/api/admin/${resource}/:id`, (ctx) => API.updateResource(ctx, resource));
-    router.delete(`/api/admin/${resource}/:id`, (ctx) => API.deleteResource(ctx, resource));
+    const access = API.resourceAccess(resource);
+    router.get(`/api/admin/${resource}`, api((ctx) => API.listResource(ctx, resource), { action: access.read }));
+    router.post(`/api/admin/${resource}`, api((ctx) => API.createResource(ctx, resource), { action: access.write }));
+    router.patch(`/api/admin/${resource}/:id`, api((ctx) => API.updateResource(ctx, resource), { action: access.write }));
+    router.delete(`/api/admin/${resource}/:id`, api((ctx) => API.deleteResource(ctx, resource), { action: access.write }));
   }
 
   router.get('/api/admin/users', api(API.listUsers, { action: 'users:write' }));
@@ -257,7 +262,7 @@ export function createApp(options = {}) {
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
   router.get('/api/admin/reports.csv', api(API.reportsCsv, { action: 'reports:read' }));
   router.get('/api/admin/tracking-events', api(API.trackingEvents, { action: 'overview:read' }));
-  router.get('/api/admin/webhooks', api(API.webhookDeliveries, { action: 'overview:read' }));
+  router.get('/api/admin/webhooks', api(API.webhookDeliveries, { action: 'settings:write' }));
   router.get('/api/admin/settings', api(API.getSettings, { action: 'settings:write' }));
   router.patch('/api/admin/settings', api(API.updateSettings, { action: 'settings:write' }));
   router.get('/api/admin/assistant-log', api(API.assistantLog, { action: 'overview:read' }));
@@ -508,6 +513,8 @@ export function createApp(options = {}) {
 
   return {
     server, db, baseUrl, limiter,
+    // In-process metadata only; no route manifest is exposed over HTTP.
+    routeManifest: router.describe(),
     listen(port = 3000, host = '127.0.0.1') {
       return new Promise((resolvePromise, reject) => {
         server.once('error', reject);
