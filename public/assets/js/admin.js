@@ -894,7 +894,7 @@
       <form id="userForm" class="stack">
         <div class="form-grid">
           <div class="field"><label>الاسم</label><input data-key="name" value="${esc(user?.name || '')}"></div>
-          ${user ? '' : '<div class="field"><label>اسم الدخول (لاتيني)</label><input data-key="username" dir="ltr"></div>'}
+          ${user ? '' : '<div class="field"><label>اسم المستخدم</label><input data-key="username" dir="auto" required maxlength="32" aria-describedby="username-help"><small id="username-help">من 3 إلى 32 حرفًا عربيًا أو إنجليزيًا أو رقمًا. يمكن استخدام . و _ و - دون مسافات. مثال: أحمد_01</small></div>'}
           <div class="field"><label>الدور الأساسي</label><select data-key="role">${[['agent', 'موظف'], ['manager', 'مدير قسم'], ['admin', 'مدير']].map(([v, l]) => `<option value="${v}" ${user?.role === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
           <div class="field"><label>قالب الصلاحيات</label><select data-key="roleKey"><option value="">استخدم صلاحيات الدور الأساسي</option>
             ${organization.roles.map((role) => `<option value="${esc(role.role_key)}" ${user?.role_key === role.role_key ? 'selected' : ''}>${esc(role.name)}</option>`).join('')}</select></div>
