@@ -157,7 +157,7 @@ test('الموقع يُطلق الإرسال فعليًا عند إنشاء طل
 
   const res = await fetch(`${base}/api/requests`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
     body: JSON.stringify({
       type: 'consult', topic: 'general', name: 'طلب ويبهوك', phone: '0791111111', consent: true,
       message: 'اختبار التكامل مع n8n عند إنشاء الطلب',
@@ -215,15 +215,26 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
 
   const login = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
     body: JSON.stringify({ username: 'laurette', password: 'Test-Only-Admin-Password-42' }),
   });
-  const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+  let cookie = (login.headers.get('set-cookie') || '').split(';')[0];
   assert.equal(login.status, 200);
+  if ((await login.json()).user.mustChange) {
+    const changed = await fetch(`${base}/api/auth/change-password`, { method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base, cookie },
+      body: JSON.stringify({ currentPassword: 'Test-Only-Admin-Password-42', newPassword: 'Changed-Admin-Password-43' }) });
+    assert.equal(changed.status, 200);
+    const again = await fetch(`${base}/api/auth/login`, { method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base },
+      body: JSON.stringify({ username: 'laurette', password: 'Changed-Admin-Password-43' }) });
+    assert.equal(again.status, 200);
+    cookie = (again.headers.get('set-cookie') || '').split(';')[0];
+  }
 
   const created = await fetch(`${base}/api/requests`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
     body: JSON.stringify({ type: 'consult', topic: 'general', name: 'حالة ويبهوك', phone: '0792222222', consent: true, message: 'اختبار مزامنة الحالة مع الشيت' }),
   });
   const createdPayload = await created.json();
@@ -233,7 +244,7 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
   const row = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(reference);
   const patched = await fetch(`${base}/api/admin/requests/${row.id}`, {
     method: 'PATCH',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', cookie },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base, cookie },
     body: JSON.stringify({ status: 'quoted' }),
   });
   assert.equal(patched.status, 200, await patched.text());
@@ -258,7 +269,7 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
   // الإغلاق: confirmed ⇒ closed = true (يوقف تصعيد 24 ساعة في الشيت)
   const closing = await fetch(`${base}/api/admin/requests/${row.id}`, {
     method: 'PATCH',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', cookie },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base, cookie },
     body: JSON.stringify({ status: 'confirmed' }),
   });
   assert.equal(closing.status, 200, await closing.text());

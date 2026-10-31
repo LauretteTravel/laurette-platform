@@ -5,6 +5,59 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const arNum = (n) => Number(n || 0).toLocaleString('en-US');
+  const TRANSITION_MS = 2000;
+
+  function showTransition() {
+    const overlay = $('#loretTransition');
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('is-transitioning');
+    }
+    return new Promise((resolve) => setTimeout(resolve, TRANSITION_MS));
+  }
+
+  function hideTransition() {
+    const overlay = $('#loretTransition');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('is-transitioning');
+  }
+
+  window.loretShowTransition = showTransition;
+  window.loretHideTransition = hideTransition;
+
+  document.addEventListener('click', (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.target.closest('[data-print-catalog]')) {
+      event.preventDefault();
+      window.print();
+      return;
+    }
+    const link = event.target.closest('a[href]');
+    if (!link || link.target || link.hasAttribute('download') || link.dataset.noTransition !== undefined) return;
+    const destination = new URL(link.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    if (destination.pathname === window.location.pathname
+      && destination.search === window.location.search
+      && destination.hash) return;
+    if (destination.href === window.location.href) return;
+    event.preventDefault();
+    showTransition().then(() => window.location.assign(destination.href));
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'get'
+      || form.matches('.request-form, #quizForm, #trackForm, [data-form]')
+      || form.dataset.transitionPending === 'true') return;
+    const destination = new URL(form.action || window.location.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    event.preventDefault();
+    form.dataset.transitionPending = 'true';
+    showTransition().then(() => event.submitter ? form.requestSubmit(event.submitter) : form.requestSubmit());
+  }, true);
 
   /* ---------------- toasts ---------------- */
   function toast(message, kind = 'ok', ms = 4200) {
@@ -29,6 +82,21 @@
   const onScroll = () => header && header.classList.toggle('is-stuck', window.scrollY > 8);
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  const arabicLanguageButton = $('[data-language-reset="ar"]');
+  arabicLanguageButton?.addEventListener('click', () => {
+    const host = window.location.hostname;
+    const rootDomain = host.split('.').slice(-2).join('.');
+    for (const cookieName of ['googtrans', 'googtransopt']) {
+      document.cookie = `${cookieName}=; Max-Age=0; path=/; SameSite=Lax`;
+      for (const domain of new Set([host.includes('.') ? `.${host}` : '', rootDomain.includes('.') ? `.${rootDomain}` : ''])) {
+        if (domain) document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${domain}; SameSite=Lax`;
+      }
+    }
+    document.documentElement.lang = 'ar';
+    document.documentElement.dir = 'rtl';
+    window.location.reload();
+  });
 
   const toggle = $('#navToggle');
   const nav = $('#mainNav');
@@ -214,6 +282,8 @@
       }
       const wrapper = document.createElement('div');
       wrapper.innerHTML = resultMarkup(payload);
+      await showTransition();
+      hideTransition();
       form.replaceWith(wrapper.firstElementChild);
       wrapper.firstElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
       window.dispatchEvent(new CustomEvent('loret:lead', {
@@ -268,7 +338,7 @@
         toast('تم نسخ الرقم المرجعي');
       } catch { toast('انسخ الرقم يدويًا', 'warn'); }
     }
-    if (e.target.closest('[data-new-request]')) location.reload();
+    if (e.target.closest('[data-new-request]')) showTransition().then(() => location.reload());
     if (e.target.closest('[data-open-chat]')) openChat();
   });
 
@@ -287,6 +357,8 @@
           body: JSON.stringify(Object.fromEntries(fd.entries())),
         });
         const data = await res.json();
+        await showTransition();
+        hideTransition();
         if (!data.ok || !data.matches.length) {
           out.innerHTML = '<div class="empty"><b>لا توجد مطابقة مباشرة</b><p>وسّع الميزانية أو غيّر الشهر، أو اطلب برنامجًا مخصصًا.</p><a class="btn btn-gold" href="/consult">اطلب برنامجًا مخصصًا</a></div>';
           return;
@@ -561,7 +633,7 @@
     }
   });
 
-  /* ---------------- WhatsApp branch chooser ---------------- */
+  /* ---------------- direct contact chooser ---------------- */
   const waModal = $('#waModal');
   let waDefaultText = 'السلام عليكم، أرغب بالاستفسار عن خدمات لوريت';
 
@@ -569,7 +641,7 @@
     if (!waModal) return;
     if (offerDialogEl && offerDialogEl.open) offerDialogEl.close();
     const message = (text || waDefaultText).trim();
-    $$('[data-wa-number]', waModal).forEach((a) => {
+    $('[data-wa-direct], [data-wa-number]', waModal).forEach((a) => {
       a.href = `https://wa.me/${a.dataset.waNumber}?text=${encodeURIComponent(message)}`;
     });
     waModal.hidden = false;
@@ -593,10 +665,12 @@
     if (e.target.closest('[data-wa-close]') || e.target === waModal) closeWa();
   });
 
-  // A branch number click is the real contact conversion.
   waModal?.addEventListener('click', (e) => {
-    if (!e.target.closest('[data-wa-number]')) return;
-    window.dispatchEvent(new CustomEvent('loret:whatsapp', { detail: { type: 'branch' } }));
+    const contact = e.target.closest('[data-wa-direct], [data-contact-call]');
+    if (!contact || contact.getAttribute('aria-disabled') === 'true') return;
+    window.dispatchEvent(new CustomEvent('loret:whatsapp', {
+      detail: { type: contact.hasAttribute('data-contact-call') ? 'direct-call' : 'direct-message' },
+    }));
   });
 
   /* ---------------- offer posters & lightbox ---------------- */

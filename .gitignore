@@ -20,3 +20,6 @@ shots/
 *.zip
 .DS_Store
 Thumbs.db
+
+# Local phase 0.5 backups and migration rehearsals (never upload).
+/data/phase05-migration/
