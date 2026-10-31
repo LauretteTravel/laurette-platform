@@ -12,7 +12,7 @@ const snapshot = db => Object.fromEntries(tables(db).map(t => [t, rows(db, t)]))
 const normalized = value => JSON.parse(JSON.stringify(value));
 const now = "2026-10-01T00:00:00.000Z";
 
-test("phase05 migration: main 26 to operations 49, original data retained, reopen and backup restore", () => {
+test("phase05 migration: main 26 to operations 50, original data retained, reopen and backup restore", () => {
   mkdirSync(dir, { recursive: true });
   // Recreate only the known synthetic fixture, never a user-supplied database.
   let db = new DatabaseSync(":memory:");
@@ -43,7 +43,7 @@ test("phase05 migration: main 26 to operations 49, original data retained, reope
   db.exec(`VACUUM INTO '${backupFile}'`);
   db.close();
   db = openDb(unique);
-  assert.equal(tables(db).length, 49);
+  assert.equal(tables(db).length, 50);
   for (const [table, records] of Object.entries(before)) {
     if(table==='audit_log') {
       assert.ok(rows(db,table).length>=records.length);
@@ -64,7 +64,7 @@ test("phase05 migration: main 26 to operations 49, original data retained, reope
   assert.deepEqual(normalized(snapshot(db)),normalized(before));
   db.close();
   console.log(
-    `MIGRATION main: 26 -> 49; 7 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`,
+    `MIGRATION main: 26 -> 50; 7 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`,
   );
 });
 
@@ -91,7 +91,7 @@ test('phase05 migration: CRM database retains all business tables when n8n is ad
   db.exec(`VACUUM INTO '${backup}'`);
   db.close();
   db = openDb(file);
-  assert.equal(tables(db).length, 49);
+  assert.equal(tables(db).length, 50);
   for (const [table, records] of Object.entries(before)) {
     if(table==='audit_log') {
       const current=rows(db,table);assert.ok(current.length>=records.length);
@@ -120,6 +120,6 @@ test('phase05 migration: CRM database retains all business tables when n8n is ad
   assert.deepEqual(normalized(snapshot(db)),normalized(before));
   db.close();
   console.log(
-    "MIGRATION CRM: 36 -> 49; all 36 table contents retained; backup retained",
+    "MIGRATION CRM: 36 -> 50; all 36 table contents retained; backup retained",
   );
 });
