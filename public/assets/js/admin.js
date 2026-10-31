@@ -18,6 +18,8 @@
       manager: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'programs:write', 'content:write', 'visa:write', 'kb:write', 'audit:read', 'overview:read', 'reports:read'],
       agent: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'overview:read', 'kb:write'],
     };
+    const taskLegacy={'tasks:read':'requests:read','tasks:write':'requests:write','tasks:assign':'requests:write'};
+    if(taskLegacy[permission])permission=taskLegacy[permission];
     if (permission === 'requests:assign') permission = 'requests:write';
     return (legacy[state.user?.role] || []).includes(permission);
   }
@@ -60,6 +62,8 @@
 
   /* ---------------- login ---------------- */
   function renderLogin(message = "") {
+    closeDrawer();
+    clearInterval(notificationTimer);notificationTimer=null;
     root.innerHTML = `<div class="login-wrap">
       <form class="login-card" id="loginForm" autocomplete="on">
         <div class="brand" style="margin-bottom:16px">
@@ -164,6 +168,7 @@
   /* ---------------- shell ---------------- */
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
+    { id:'tasks',label:'مهامي والفريق',icon:'☑',permission:'tasks:read' },
     { id: 'followups', label: 'متابعاتي', icon: '◷', permission: 'requests:read' },
     { id: 'requests', label: 'صندوق الطلبات', icon: '✉', permission: 'requests:read' },
     { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
@@ -187,11 +192,12 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'followups', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
   function renderShell() {
+    closeDrawer();
     if (state.user.mustChange) {
       renderRequiredPasswordChange();
       return;
@@ -219,7 +225,7 @@
         <div class="admin-top">
           <h1 id="pageTitle">${esc(sections.find((s) => s.id === state.section)?.label || '')}</h1>
           <span class="spacer"></span>
-          <label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
+          ${hasPermission('tasks:read')?'<button class="btn btn-ghost btn-sm" id="staffNotifications" aria-label="فتح الإشعارات">الإشعارات</button>':''}<label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
           <a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">عرض الموقع</a>
         </div>
         <div id="view"></div>
@@ -234,6 +240,7 @@
       renderLogin();
     });
     loadSection();
+    startNotifications();
     api("/api/auth/memberships")
       .then((data) => {
         if (data.memberships.length < 2) return;
@@ -325,7 +332,7 @@
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
     const map = {
-      overview: renderOverview, requests: renderRequests, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
+      overview: renderOverview, requests: renderRequests, tasks: renderTasks, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
@@ -395,6 +402,369 @@
     });
   }
 
+
+  /* ---------------- tasks and internal notifications ---------------- */
+  const TASK_STATUS = {
+    new: "جديدة",
+    in_progress: "قيد العمل",
+    waiting: "تنتظر طرفًا آخر",
+    review: "بحاجة مراجعة",
+    done: "مكتملة",
+    cancelled: "ملغاة",
+  };
+  const TASK_PRIORITY = {
+    low: "منخفضة",
+    normal: "عادية",
+    high: "مرتفعة",
+    urgent: "عاجلة",
+  };
+  let notificationTimer = null,
+    notificationBusy = false;
+  function localInput(iso) {
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  }
+  async function updateNotificationCount() {
+    const button = $("#staffNotifications");
+    if (!button || notificationBusy || document.hidden) return;
+    notificationBusy = true;
+    try {
+      const data = await api("/api/admin/notifications");
+      if (button.isConnected) {
+        button.textContent = `الإشعارات (${num(data.unread)})`;
+        button.title = "الإشعارات ضمن نطاق الوصول الحالي";
+      }
+    } catch (error) {
+      if (button.isConnected) button.title = error.message;
+    } finally {
+      notificationBusy = false;
+    }
+  }
+  function startNotifications() {
+    clearInterval(notificationTimer);
+    notificationTimer = null;
+    if (!hasPermission("tasks:read")) return;
+    $("#staffNotifications")?.addEventListener("click", () => openNotifications());
+    updateNotificationCount();
+    notificationTimer = setInterval(updateNotificationCount, 60000);
+  }
+  async function openNotifications(page = 1) {
+    try {
+      const data = await api(`/api/admin/notifications?page=${page}`);
+      openDrawer(
+        `<div class="drawer-head"><h2>الإشعارات</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · صفحة ${data.page}/${data.pages}</p><ul class="timeline">${data.notifications.map((n) => `<li><button class="btn btn-ghost" data-task-notification="${n.id}" data-task-id="${n.task_id}">${n.read_at ? "" : "● "}${esc(n.title)}</button><span>${esc({ created: "مهمة جديدة", updated: "تحديث المهمة", comment: "تعليق جديد", checklist: "تحديث قائمة التحقق" }[n.kind] || "تحديث مهمة")} · ${followDate(n.created_at)}</span></li>`).join("") || "<li>لا توجد إشعارات متاحة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-notification-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-notification-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
+      );
+      $("[data-notification-prev]").onclick=()=>openNotifications(page-1);
+      $("[data-notification-next]").onclick=()=>openNotifications(page+1);
+      $("[data-task-notification]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            try {
+              await api(
+                `/api/admin/notifications/${b.dataset.taskNotification}/read`,
+                { method: "POST" },
+              );
+              await openTask(Number(b.dataset.taskId));
+              updateNotificationCount();
+            } catch (e) {
+              toast(e.message, "bad");
+            }
+          }),
+      );
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function renderTasks(page = 1) {
+    const view = $("#view");
+    try {
+      const data = await api(
+        "/api/admin/tasks?" +
+          new URLSearchParams({ ...state.query, page: String(page) }),
+      );
+      if (state.section !== "tasks") return;
+      view.innerHTML = `<div class="toolbar">${hasPermission("tasks:write") ? '<button class="btn btn-primary" data-new-task>مهمة جديدة</button>' : ""}<label>الحالة<select data-task-filter="status"><option value="open">المفتوحة</option><option value="all" ${state.query.status === "all" ? "selected" : ""}>كل الحالات</option>${Object.entries(
+        TASK_STATUS,
+      )
+        .map(
+          ([k, v]) =>
+            `<option value="${k}" ${state.query.status === k ? "selected" : ""}>${v}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>الموعد<select data-task-filter="due"><option value="">كل المواعيد</option><option value="overdue" ${state.query.due === "overdue" ? "selected" : ""}>متأخرة</option><option value="next24h" ${state.query.due === "next24h" ? "selected" : ""}>خلال 24 ساعة</option></select></label>${hasPermission("tasks:assign") ? `<label>النطاق<select data-task-filter="view"><option value="mine">مهامي والمشارك بها</option><option value="team" ${state.query.view === "team" ? "selected" : ""}>الفريق ضمن نطاقي</option></select></label>` : ""}<label>بحث<input data-task-filter="q" value="${esc(state.query.q || "")}" maxlength="200"></label><button class="btn btn-ghost" data-task-apply>تصفية</button></div><p class="muted">${num(data.total)} مهمة · المواعيد بتوقيت عمّان</p><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>المهمة</th><th>المسؤول</th><th>الجهة</th><th>الحالة</th><th>الأولوية</th><th>الموعد</th></tr></thead><tbody>${data.tasks.map((t) => `<tr><td><button class="btn btn-ghost" data-task-open="${t.id}">${esc(t.title)}</button></td><td>${esc(t.assignee_name)}</td><td>${esc(t.branch_name)}<br>${esc(t.department_name || "كل الأقسام")}</td><td>${TASK_STATUS[t.status]}</td><td>${TASK_PRIORITY[t.priority]}</td><td>${followDate(t.due_at)}${t.overdue ? '<br><span class="badge badge-danger">متأخرة</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="6">لا توجد مهام مطابقة.</td></tr>'}</tbody></table></div></div><div class="btn-row mt-3"><button class="btn btn-ghost" data-task-prev ${page <= 1 ? "disabled" : ""}>السابق</button><span>${page}/${data.pages}</span><button class="btn btn-ghost" data-task-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`;
+      $("[data-new-task]")?.addEventListener("click", () => openTaskCreate());
+      $$("[data-task-open]", view).forEach(
+        (b) => (b.onclick = () => openTask(Number(b.dataset.taskOpen))),
+      );
+      $("[data-task-apply]", view).onclick = () => {
+        state.query = {};
+        $$("[data-task-filter]", view).forEach((el) => {
+          if (el.value) state.query[el.dataset.taskFilter] = el.value;
+        });
+        renderTasks();
+      };
+      $("[data-task-prev]", view).onclick = () => renderTasks(page - 1);
+      $("[data-task-next]", view).onclick = () => renderTasks(page + 1);
+    } catch (error) {
+      if (state.section === "tasks") {
+        view.innerHTML = `<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-task-retry>إعادة المحاولة</button>`;
+        $("[data-task-retry]", view).onclick = () => renderTasks(page);
+      }
+    }
+  }
+  async function openTaskCreate(request = null) {
+    try {
+      const initial = await api("/api/admin/tasks/options");
+      openDrawer(
+        `<div class="drawer-head"><h2>مهمة جديدة</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><form id="taskCreate" class="stack"><label>العنوان<input name="title" required minlength="3" maxlength="160"></label><label>الوصف<textarea name="description" maxlength="4000"></textarea></label><div class="form-grid"><label>الفرع<select name="branchId" required><option value="">اختر الفرع</option>${initial.branches.map((b) => `<option value="${b.id}" ${Number(request?.branch_id || state.user.branchId) === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label><label>القسم<select name="departmentId"><option value="">دون قسم محدد</option></select></label></div><label>مرجع الطلب (اختياري)<input name="requestReference" maxlength="100" value="${esc(request?.reference || "")}" placeholder="مرجع الطلب كما يظهر في صندوق الطلبات"></label><p class="muted">ربط الطلب يتطلب تطابق الفرع والقسم والوصول المسبق إليه.</p><label>الموعد بتوقيت جهازك (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)})<input type="datetime-local" name="dueAt" required></label><label>الأولوية<select name="priority">${Object.entries(
+          TASK_PRIORITY,
+        )
+          .map(
+            ([k, v]) =>
+              `<option value="${k}" ${k === "normal" ? "selected" : ""}>${v}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label><label>المسؤول<select name="assignedTo" required></select></label>${hasPermission("tasks:assign") ? '<label>المشاركون (اختياري؛ يمكن تحديد أكثر من موظف)<select name="members" multiple size="5" aria-describedby="task-members-help"></select></label><small id="task-members-help">على الكمبيوتر استخدم Ctrl أو ⌘ لتحديد عدة مشاركين.</small>' : ""}<p class="form-status is-error" role="status"></p><button class="btn btn-primary" type="submit">إنشاء المهمة</button></form>`,
+      );
+      const form = $("#taskCreate"),
+        branch = form.elements.branchId,
+        dept = form.elements.departmentId,
+        owner = form.elements.assignedTo,
+        submit = form.querySelector('[type="submit"]');
+      let loading = 0;
+      const load = async (refreshDepartments = false) => {
+        const ticket = ++loading;
+        submit.disabled = true;
+        try {
+          if (!branch.value) {
+            owner.innerHTML = "";
+            return;
+          }
+          const desired = refreshDepartments
+            ? (request?.department_id ??
+              (Number(branch.value) === state.user.branchId
+                ? state.user.departmentId
+                : null) ??
+              "")
+            : dept.value;
+          const options = await api(
+            "/api/admin/tasks/options?" +
+              new URLSearchParams({
+                branchId: branch.value,
+                departmentId: String(desired),
+                ...(form.elements.requestReference.value
+                  ? { requestReference: form.elements.requestReference.value }
+                  : {}),
+              }),
+          );
+          if (ticket !== loading || !form.isConnected) return;
+          if (refreshDepartments)
+            dept.innerHTML =
+              '<option value="">دون قسم محدد</option>' +
+              options.departments
+                .map(
+                  (d) =>
+                    `<option value="${d.id}" ${Number(desired) === d.id ? "selected" : ""}>${esc(d.name)}</option>`,
+                )
+                .join("");
+          owner.innerHTML = options.users
+            .map(
+              (u) =>
+                `<option value="${u.id}" ${u.id === state.user.id ? "selected" : ""}>${esc(u.name)}</option>`,
+            )
+            .join("");
+          if (form.elements.members)
+            form.elements.members.innerHTML = options.users
+              .map((u) => `<option value="${u.id}">${esc(u.name)}</option>`)
+              .join("");
+          form.querySelector('[role="status"]').textContent = "";
+          submit.disabled = !owner.options.length;
+        } catch (error) {
+          if (ticket === loading)
+            form.querySelector('[role="status"]').textContent = error.message;
+        }
+      };
+      branch.onchange = () => {
+        request = null;
+        load(true);
+      };
+      dept.onchange = () => load();
+      form.elements.requestReference.onchange = () => load();
+      load(true);
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        submit.disabled = true;
+        try {
+          const body = Object.fromEntries(new FormData(form));
+          body.dueAt = new Date(body.dueAt).toISOString();
+          body.members = form.elements.members
+            ? [...form.elements.members.selectedOptions].map((o) =>
+                Number(o.value),
+              )
+            : [];
+          const result = await api("/api/admin/tasks", {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          toast("أُنشئت المهمة");
+          openTask(result.id);
+          if (state.section === "tasks") renderTasks();
+          updateNotificationCount();
+        } catch (error) {
+          form.querySelector('[role="status"]').textContent = error.message;
+          submit.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function openTask(id) {
+    try {
+      const data = await api(`/api/admin/tasks/${id}`),
+        t = data.task;
+      const write = hasPermission("tasks:write"),
+        edit =
+          write &&
+          (t.assigned_to === state.user.id ||
+            t.created_by === state.user.id ||
+            hasPermission("tasks:assign"));
+      const options = hasPermission("tasks:assign")
+        ? await api(
+            "/api/admin/tasks/options?" +
+              new URLSearchParams({
+                branchId: String(t.branch_id),
+                departmentId:
+                  t.department_id === null ? "" : String(t.department_id),
+                ...(t.request_id ? { requestId: String(t.request_id) } : {}),
+              }),
+          ).catch((error) => {
+            toast("تعذر تحميل الموظفين: " + error.message, "bad");
+            return { users: [] };
+          })
+        : null;
+      openDrawer(`<div class="drawer-head"><h2>${esc(t.title)}</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p class="badge-row"><span class="badge badge-soft">${TASK_STATUS[t.status]}</span><span class="badge badge-gold">${TASK_PRIORITY[t.priority]}</span></p><p style="white-space:pre-wrap">${esc(t.description || "دون وصف إضافي")}</p><p>المسؤول: ${esc(data.assigneeName || "غير متاح")}</p><p>الموعد: ${followDate(t.due_at)} بتوقيت عمّان</p><p>المشاركون: ${data.members.map((m) => esc(m.name)).join("، ") || "لا يوجد"}</p>${t.request_id ? `<button class="btn btn-ghost btn-sm" data-open-linked-request>فتح الطلب ${esc(data.requestReference)}</button>` : ""}
+        ${
+          edit
+            ? `<details><summary>تعديل المهمة ونقل المسؤولية</summary><form id="taskEdit" class="stack"><label>العنوان<input name="title" value="${esc(t.title)}" required minlength="3" maxlength="160"></label><label>الوصف<textarea name="description" maxlength="4000">${esc(t.description)}</textarea></label><label>الموعد بتوقيت جهازك<input name="dueAt" type="datetime-local" value="${localInput(t.due_at)}" required></label><label>الأولوية<select name="priority">${Object.entries(
+                TASK_PRIORITY,
+              )
+                .map(
+                  ([k, v]) =>
+                    `<option value="${k}" ${t.priority === k ? "selected" : ""}>${v}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label><label>الحالة<select name="status">${[t.status, ...data.statuses[t.status]].map((k) => `<option value="${k}">${TASK_STATUS[k]}</option>`).join("")}</select></label>${
+                options
+                  ? `<label>المسؤول<select name="assignedTo"><option value="${t.assigned_to}">${esc(data.assigneeName || "المسؤول الحالي")}</option>${options.users
+                      .filter((u) => u.id !== t.assigned_to)
+                      .map(
+                        (u) => `<option value="${u.id}">${esc(u.name)}</option>`,
+                      )
+                      .join("")}</select></label>`
+                  : ""
+              }<label>سبب التعديل أو نتيجة الإتمام<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ التغيير</button></form></details>`
+            : ""
+        }
+        <hr><h3>قائمة التحقق</h3>${data.checklist.map((item) => `<label style="display:block;margin-block:10px"><input type="checkbox" data-task-check="${item.id}" ${item.done ? "checked" : ""} ${!write || ["done", "cancelled"].includes(t.status) ? "disabled" : ""}> ${esc(item.title)}</label>`).join("") || '<p class="muted">لا توجد بنود.</p>'}${write && !["done", "cancelled"].includes(t.status) ? '<form id="taskCheckAdd" class="stack"><label>بند جديد<input name="title" required maxlength="200"></label><p class="form-status is-error" role="status"></p><button class="btn btn-ghost">إضافة بند</button></form>' : ""}
+        <hr><h3>التعليقات</h3>${write ? '<form id="taskComment" class="stack"><label>تعليق داخلي<textarea name="body" required maxlength="2000"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">إضافة تعليق</button></form>' : ""}<ul class="timeline">${data.comments.map((c) => `<li><p style="white-space:pre-wrap">${esc(c.body)}</p><span>${esc(c.user_name)} · ${followDate(c.created_at)}</span></li>`).join("") || "<li>لا تعليقات بعد.</li>"}</ul>
+        <h3>سجل المهمة (آخر 100 حدث)</h3><ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.reason)}</b><span>${esc(e.actor_name || "النظام")} · ${followDate(e.created_at)}</span>${e.before_json ? `<small>${taskEventChange(e)}</small>` : ""}</li>`).join("")}</ul>`);
+      $("[data-open-linked-request]")?.addEventListener("click", () =>
+        openRequest(t.request_id),
+      );
+      const submitForm = (selector, path, method, build) => {
+        $(selector)?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const form = event.target,
+            button = form.querySelector("button");
+          button.disabled = true;
+          try {
+            await api(path, {
+              method,
+              body: JSON.stringify(build(Object.fromEntries(new FormData(form)))),
+            });
+            toast("تم الحفظ");
+            await openTask(id);
+            if (state.section === "tasks") renderTasks();
+            updateNotificationCount();
+          } catch (error) {
+            form.querySelector('[role="status"]').textContent = error.message;
+          } finally {
+            button.disabled = false;
+          }
+        });
+      };
+      submitForm("#taskEdit", `/api/admin/tasks/${id}`, "PATCH", (body) => ({
+        ...body,
+        dueAt: new Date(body.dueAt).toISOString(),
+        version: t.version,
+      }));
+      submitForm(
+        "#taskComment",
+        `/api/admin/tasks/${id}/comments`,
+        "POST",
+        (body) => body,
+      );
+      submitForm(
+        "#taskCheckAdd",
+        `/api/admin/tasks/${id}/checklist`,
+        "POST",
+        (body) => body,
+      );
+      $$("[data-task-check]").forEach(
+        (box) =>
+          (box.onchange = async () => {
+            box.disabled = true;
+            try {
+              const item = data.checklist.find(
+                (i) => i.id === Number(box.dataset.taskCheck),
+              );
+              await api(`/api/admin/task-checklist/${item.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  done: box.checked,
+                  version: item.version,
+                }),
+              });
+              openTask(id);
+            } catch (error) {
+              box.checked = !box.checked;
+              box.disabled = false;
+              toast(error.message, "bad");
+            }
+          }),
+      );
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  function taskEventChange(event) {
+    try {
+      const old = JSON.parse(event.before_json),
+        next = JSON.parse(event.after_json);
+      return [
+        old.status !== next.status && next.status
+          ? `${TASK_STATUS[old.status]} ← ${TASK_STATUS[next.status]}`
+          : "",
+        old.assigned_to !== next.assigned_to && next.assigned_to
+          ? `نُقلت المسؤولية من ${event.from_assignee_name || "المسؤول السابق"} إلى ${event.to_assignee_name || "المسؤول الجديد"}`
+          : "",
+        old.due_at !== next.due_at && next.due_at
+          ? `تغير الموعد إلى ${followDate(next.due_at)}`
+          : "",
+      ]
+        .filter(Boolean)
+        .map(esc)
+        .join(" · ");
+    } catch {
+      return "";
+    }
+  }
 
   /* ---------------- scoped request follow-ups ---------------- */
   const FOLLOW_STATUS = { open: 'مفتوحة', done: 'مكتملة', cancelled: 'ملغاة' };
@@ -622,6 +992,7 @@
       <div class="field"><textarea id="dNote" rows="3" placeholder="ملاحظة تظهر للفريق فقط"></textarea></div>
       <button class="btn btn-primary btn-sm mt-2" data-add-note>إضافة الملاحظة</button>` : ''}
       <hr>
+      ${hasPermission('tasks:write')?'<button class="btn btn-ghost btn-sm" data-new-linked-task>مهمة مرتبطة بهذا الطلب</button>':''}
       <section id="requestFollowUps" aria-label="متابعات الطلب" aria-live="polite"></section><hr>
       <h3>السجل</h3>
       <ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.message || e.kind)}</b><span>${esc(e.actor_name || 'النظام')} · ${dt(e.created_at)}</span></li>`).join('')}</ul>
@@ -629,6 +1000,7 @@
       ${payload.phone ? `<div class="btn-row mt-3"><a class="btn btn-wa btn-sm" href="https://wa.me/${String(payload.phone).replace(/\D/g, '')}" target="_blank" rel="noopener">واتساب العميل</a><a class="btn btn-ghost btn-sm" href="tel:${esc(payload.phone)}">اتصال</a></div>` : ''}
     `);
 
+    $('[data-new-linked-task]')?.addEventListener('click',()=>openTaskCreate(r));
     loadRequestFollowUps(id);
     const refresh = () => { closeDrawer(); openRequest(id); };
     $('[data-voucher-admin]')?.addEventListener('click', () => {
@@ -1207,6 +1579,7 @@
     const data = await api("/api/admin/organization");
     const scopeLabels = { organization: 'كل المؤسسة', branch: 'الفرع', department: 'القسم', assigned: 'الطلبات المسندة' };
     const permissionLabels = {
+      "tasks:read":"عرض المهام", "tasks:write":"إنشاء وتحديث المهام", "tasks:assign":"إسناد المهام للغير",
       "overview:read": "نظرة عامة",
       "requests:read": "عرض الطلبات",
       "requests:write": "تحديث الطلبات",
