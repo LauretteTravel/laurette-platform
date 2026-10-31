@@ -1,29 +1,32 @@
-import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import http from "node:http";
+import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { createHash, randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 import { openDb, seedDatabase, loadSeed, one, exec, q } from './lib/db.js';
 import { hashPassword, sessionUser, purgeExpiredSessions } from './lib/auth.js';
 import { CLIENT_COOKIE, clientSessionUser } from './lib/client-auth.js';
 import { emailConfigured, sendClientOtp } from './lib/client-email.js';
 import { HttpError, createRouter, json, html, text, redirect, parseCookies, securityHeaders, clientIp, RateLimiter, withCompression } from './lib/http.js';
-import { artSvg, ART_KEYS } from './lib/art.js';
+import { artSvg, ART_KEYS } from "./lib/art.js";
 import { ASSET_V, trackingFlags } from './lib/views/layout.js';
 import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
-import * as API from './lib/api.js';
-import * as CLIENT_API from './lib/client-api.js';
-import * as WHATSAPP from './lib/whatsapp.js';
-import { COOKIE } from './lib/api.js';
+import * as API from "./lib/api.js";
+import * as CLIENT_API from "./lib/client-api.js";
+import * as WHATSAPP from "./lib/whatsapp.js";
+import { COOKIE } from "./lib/api.js";
+import * as STAFF from "./lib/staff-api.js";
+import * as STAFF_MFA from "./lib/staff-mfa.js";
+import { auditContext } from "./lib/audit-context.js";
 import { withApiAuthorization } from './lib/api-authorization.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
-import { localizeHtml, dictionary } from './lib/i18n.js';
+import { localizeHtml, dictionary } from "./lib/i18n.js";
 
-const HERE = fileURLToPath(new URL('.', import.meta.url));
-const PUBLIC_DIR = join(HERE, 'public');
+const HERE = fileURLToPath(new URL(".", import.meta.url));
+const PUBLIC_DIR = join(HERE, "public");
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -140,28 +143,28 @@ export function createApp(options = {}) {
     return sendHtml(ctx, 200, body, { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   };
 
-  router.get('/', page(homePage));
-  router.get('/programs/print', page(programsPrintPage));
-  router.get('/programs', page(programsPage));
-  router.get('/offers', page(offersPage));
-  router.get('/jordan', page(jordanPage));
-  router.get('/programs/:slug', page(programPage));
-  router.get('/umrah', page(umrahPage));
-  router.get('/flights', page(flightsPage));
-  router.get('/hotels', page(hotelsPage));
-  router.get('/visa', page(visaPage));
-  router.get('/consult', page(consultPage));
-  router.get('/destinations', page(destinationsPage));
-  router.get('/destinations/:slug', page(destinationPage));
-  router.get('/guide', page(guidePage));
-  router.get('/guide/:slug', page(articlePage));
-  router.get('/faq', page(faqPage));
-  router.get('/track', page(trackPage));
-  router.get('/account', page(customerAccountPage));
-  router.get('/account/profile', page(customerProfilePage));
-  router.get('/about', page(aboutPage));
-  router.get('/privacy', page(privacyPage));
-  router.get('/news', page(newsPage));
+  router.get("/", page(homePage));
+  router.get("/programs/print", page(programsPrintPage));
+  router.get("/programs", page(programsPage));
+  router.get("/offers", page(offersPage));
+  router.get("/jordan", page(jordanPage));
+  router.get("/programs/:slug", page(programPage));
+  router.get("/umrah", page(umrahPage));
+  router.get("/flights", page(flightsPage));
+  router.get("/hotels", page(hotelsPage));
+  router.get("/visa", page(visaPage));
+  router.get("/consult", page(consultPage));
+  router.get("/destinations", page(destinationsPage));
+  router.get("/destinations/:slug", page(destinationPage));
+  router.get("/guide", page(guidePage));
+  router.get("/guide/:slug", page(articlePage));
+  router.get("/faq", page(faqPage));
+  router.get("/track", page(trackPage));
+  router.get("/account", page(customerAccountPage));
+  router.get("/account/profile", page(customerProfilePage));
+  router.get("/about", page(aboutPage));
+  router.get("/privacy", page(privacyPage));
+  router.get("/news", page(newsPage));
 
   /* ---------------- admin shell ---------------- */
   router.get('/admin', (ctx) => html(ctx.res, 200, adminShell(ctx), {
@@ -173,16 +176,17 @@ export function createApp(options = {}) {
 
   /* ---------------- api ---------------- */
   const POST_LIMITS = {
-    '/api/requests': { max: 20, window: 3600_000 },
-    '/api/track': { max: 30, window: 3600_000 },
-    '/api/assistant': { max: 80, window: 3600_000 },
-    '/api/recommend': { max: 60, window: 3600_000 },
-    '/api/auth/login': { max: 12, window: 600_000 },
-    '/api/track-event': { max: 300, window: 3600_000 },
-    '/api/client/auth/register': { max: 8, window: 3600_000 },
-    '/api/client/auth/verify': { max: 10, window: 600_000 },
-    '/api/client/auth/resend': { max: 5, window: 3600_000 },
-    '/api/client/auth/login': { max: 12, window: 600_000 },
+    "/api/requests": { max: 20, window: 3600_000 },
+    "/api/track": { max: 30, window: 3600_000 },
+    "/api/assistant": { max: 80, window: 3600_000 },
+    "/api/recommend": { max: 60, window: 3600_000 },
+    "/api/auth/mfa": { max: 20, window: 600_000 },
+    "/api/auth/login": { max: 12, window: 600_000 },
+    "/api/track-event": { max: 300, window: 3600_000 },
+    "/api/client/auth/register": { max: 8, window: 3600_000 },
+    "/api/client/auth/verify": { max: 10, window: 600_000 },
+    "/api/client/auth/resend": { max: 5, window: 3600_000 },
+    "/api/client/auth/login": { max: 12, window: 600_000 },
   };
 
   const api = (handler, { auth = false, action = null, limit = null } = {}) => {
@@ -198,15 +202,32 @@ export function createApp(options = {}) {
           }
         }
       }
-      return authorized(ctx);
+      return auditContext.run(
+        { user: ctx.user, ip: ctx.ip, reason: `${ctx.req.method} ${ctx.path}` },
+        () => authorized(ctx),
+      );
     };
     limited.requiredAction = action;
     return limited;
   };
 
   router.post('/api/auth/login', api(API.login, { limit: '/api/auth/login' }));
-  router.post('/api/auth/logout', api(API.logout));
-  router.get('/api/auth/me', API.me);
+  router.post(
+    "/api/auth/mfa/setup",
+    api(STAFF_MFA.setupMfa, { auth: true, limit: "/api/auth/mfa" }),
+  );
+  router.post(
+    "/api/auth/mfa/confirm",
+    api(STAFF_MFA.confirmMfa, { auth: true, limit: "/api/auth/mfa" }),
+  );
+  router.post(
+    "/api/auth/mfa/verify",
+    api(STAFF_MFA.verifyMfa, { limit: "/api/auth/mfa" }),
+  );
+  router.get("/api/auth/memberships", api(STAFF.myMemberships, { auth: true }));
+  router.post("/api/auth/context", api(STAFF.switchMembership, { auth: true }));
+  router.post("/api/auth/logout", api(API.logout));
+  router.get("/api/auth/me", API.me);
   router.post('/api/auth/change-password', api(API.changePassword, { auth: true }));
 
   router.post('/api/client/auth/register', api((ctx) => CLIENT_API.registerClient(ctx, sendVerificationEmail, clientEmailEnabled), { limit: '/api/client/auth/register' }));
@@ -224,8 +245,8 @@ export function createApp(options = {}) {
   router.post('/api/requests', api(API.createRequestApi, { limit: '/api/requests' }));
   router.post('/api/admin/requests', api(API.createInternalRequest, { action: 'requests:write', limit: '/api/requests' }));
   router.post('/api/track', api(API.trackRequest, { limit: '/api/track' }));
-  router.get('/api/programs', API.listProgramsApi);
-  router.get('/api/programs/:slug', API.getProgramApi);
+  router.get("/api/programs", API.listProgramsApi);
+  router.get("/api/programs/:slug", API.getProgramApi);
   router.post('/api/recommend', api(API.recommendApi, { limit: '/api/recommend' }));
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
@@ -234,9 +255,15 @@ export function createApp(options = {}) {
   router.get('/api/admin/requests', api(API.listRequests, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id', api(API.getRequest, { action: 'requests:read' }));
   router.patch('/api/admin/requests/:id', api(API.updateRequest, { action: 'requests:write' }));
-  router.post('/api/admin/requests/:id/transfers', api(API.createRequestTransfer, { action: 'requests:write' }));
+  router.post(
+    "/api/admin/requests/:id/transfers",
+    api(API.createRequestTransfer, { action: "requests:transfer" }),
+  );
   router.get('/api/admin/transfers', api(API.listRequestTransfers, { action: 'requests:read' }));
-  router.post('/api/admin/transfers/:id/respond', api(API.respondRequestTransfer, { action: 'requests:write' }));
+  router.post(
+    "/api/admin/transfers/:id/respond",
+    api(API.respondRequestTransfer, { action: "requests:transfer" }),
+  );
   router.get('/api/admin/customers', api(API.listCustomers, { action: 'customers:read' }));
   router.get('/api/admin/customers/:id', api(API.getCustomer, { action: 'customers:read' }));
   router.patch('/api/admin/customers/:id', api(API.updateCustomer, { action: 'customers:write' }));
@@ -246,9 +273,46 @@ export function createApp(options = {}) {
     router.get(`/api/admin/${resource}`, api((ctx) => API.listResource(ctx, resource), { action: access.read }));
     router.post(`/api/admin/${resource}`, api((ctx) => API.createResource(ctx, resource), { action: access.write }));
     router.patch(`/api/admin/${resource}/:id`, api((ctx) => API.updateResource(ctx, resource), { action: access.write }));
-    router.delete(`/api/admin/${resource}/:id`, api((ctx) => API.deleteResource(ctx, resource), { action: access.write }));
+    router.delete(
+      `/api/admin/${resource}/:id`,
+      api((ctx) => API.deleteResource(ctx, resource), {
+        action: access.delete,
+      }),
+    );
   }
 
+  router.get(
+    "/api/admin/users/:id/profile",
+    api(STAFF.employeeProfile, { action: "users:write" }),
+  );
+  router.patch(
+    "/api/admin/users/:id/profile",
+    api(STAFF.updateEmployeeProfile, { action: "users:write" }),
+  );
+  router.get(
+    "/api/admin/users/:id/memberships",
+    api(STAFF.listMemberships, { action: "users:write" }),
+  );
+  router.post(
+    "/api/admin/users/:id/memberships",
+    api(STAFF.createMembership, { action: "users:write" }),
+  );
+  router.patch(
+    "/api/admin/users/:id/memberships/:membershipId",
+    api(STAFF.updateMembership, { action: "users:write" }),
+  );
+  router.patch(
+    "/api/admin/branches/:id",
+    api(STAFF.updateOrganizationUnit, { action: "organization:write" }),
+  );
+  router.patch(
+    "/api/admin/departments/:id",
+    api(STAFF.updateOrganizationUnit, { action: "organization:write" }),
+  );
+  router.get(
+    "/api/admin/audit/export",
+    api(STAFF.exportAudit, { action: "audit:export" }),
+  );
   router.get('/api/admin/users', api(API.listUsers, { action: 'users:write' }));
   router.post('/api/admin/users', api(API.createUser, { action: 'users:write' }));
   router.patch('/api/admin/users/:id', api(API.updateUser, { action: 'users:write' }));
@@ -260,7 +324,10 @@ export function createApp(options = {}) {
   router.get('/api/admin/audit', api(API.auditLog, { action: 'audit:read' }));
   router.get('/api/admin/media', api(API.listMedia, { action: 'content:write' }));
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
-  router.get('/api/admin/reports.csv', api(API.reportsCsv, { action: 'reports:read' }));
+  router.get(
+    "/api/admin/reports.csv",
+    api(API.reportsCsv, { action: "reports:export" }),
+  );
   router.get('/api/admin/tracking-events', api(API.trackingEvents, { action: 'overview:read' }));
   router.get('/api/admin/webhooks', api(API.webhookDeliveries, { action: 'settings:write' }));
   router.get('/api/admin/settings', api(API.getSettings, { action: 'settings:write' }));

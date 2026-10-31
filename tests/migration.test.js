@@ -1,21 +1,21 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
+import test from "node:test";
+import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { readFileSync, copyFileSync, mkdirSync } from 'node:fs';
-import { openDb } from '../lib/db.js';
+import { openDb } from "../lib/db.js";
 
 // Only synthetic records: these retained backups may safely stay on the developer machine.
-const dir = 'data/phase05-migration';
+const dir = "data/phase05-migration";
 const tables = db => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(r => r.name);
 const rows = (db, table) => db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all();
 const snapshot = db => Object.fromEntries(tables(db).map(t => [t, rows(db, t)]));
 const normalized = value => JSON.parse(JSON.stringify(value));
-const now = '2026-10-01T00:00:00.000Z';
+const now = "2026-10-01T00:00:00.000Z";
 
-test('phase05 migration: main 26 to unified 37, original data retained, reopen and backup restore', () => {
+test("phase05 migration: main 26 to identity 43, original data retained, reopen and backup restore", () => {
   mkdirSync(dir, { recursive: true });
   // Recreate only the known synthetic fixture, never a user-supplied database.
-  let db = new DatabaseSync(':memory:');
+  let db = new DatabaseSync(":memory:");
   db.exec(readFileSync('tests/fixtures/pre-crm-main.sql', 'utf8'));
   assert.equal(tables(db).length, 26);
   db.prepare('INSERT INTO users (id,username,name,role,password_hash,password_salt,created_at) VALUES (1,?,?,?,?,?,?)').run('synthetic-admin','Synthetic admin','admin','synthetic-hash','synthetic-salt',now);
@@ -30,33 +30,45 @@ test('phase05 migration: main 26 to unified 37, original data retained, reopen a
   db.close();
   // Materialize the fixture in a unique path, then retain its backup and result.
   const unique = `${dir}/main-${Date.now()}-${process.pid}.db`;
-  db = new DatabaseSync(unique); db.exec('PRAGMA foreign_keys=OFF'); db.exec(readFileSync('tests/fixtures/pre-crm-main.sql','utf8'));
+  db = new DatabaseSync(unique);
+  db.exec("PRAGMA foreign_keys=OFF");
+  db.exec(readFileSync('tests/fixtures/pre-crm-main.sql', 'utf8'));
   for (const [table, records] of Object.entries(before)) for (const record of records) {
     const keys=Object.keys(record); db.prepare(`INSERT INTO "${table}" (${keys.map(k=>`"${k}"`).join(',')}) VALUES (${keys.map(()=>'?').join(',')})`).run(...Object.values(record));
   }
-  db.exec('PRAGMA foreign_keys=ON');
+  db.exec("PRAGMA foreign_keys=ON");
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
-  const backupFile = unique.replace('.db','-before.db');
-  db.exec(`VACUUM INTO '${backupFile}'`); db.close();
+  const backupFile = unique.replace(".db", "-before.db");
+  db.exec(`VACUUM INTO '${backupFile}'`);
+  db.close();
   db = openDb(unique);
-  assert.equal(tables(db).length,37);
+  assert.equal(tables(db).length, 43);
   for (const [table, records] of Object.entries(before)) {
     assert.equal(rows(db,table).length, records.length, table);
     for (let i=0;i<records.length;i++) for (const [key,value] of Object.entries(records[i])) assert.equal(rows(db,table)[i][key],value,`${table}.${key}`);
   }
   assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
-  const first=snapshot(db); db.close(); db=openDb(unique);
-  assert.deepEqual(normalized(snapshot(db)),normalized(first)); db.close();
-  const restored=unique.replace('.db','-restored.db'); copyFileSync(backupFile,restored);
-  db=new DatabaseSync(restored); assert.deepEqual(normalized(snapshot(db)),normalized(before)); db.close();
-  console.log(`MIGRATION main: 26 -> 37; 6 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`);
+  const first = snapshot(db);
+  db.close();
+  db = openDb(unique);
+  assert.deepEqual(normalized(snapshot(db)),normalized(first));
+  db.close();
+  const restored = unique.replace(".db", "-restored.db");
+  copyFileSync(backupFile, restored);
+  db = new DatabaseSync(restored);
+  assert.deepEqual(normalized(snapshot(db)),normalized(before));
+  db.close();
+  console.log(
+    `MIGRATION main: 26 -> 43; 6 synthetic rows preserved; 0 FK errors; restore exact; backup=${backupFile}`,
+  );
 });
 
 test('phase05 migration: CRM database retains all business tables when n8n is added', () => {
   mkdirSync(dir, { recursive: true });
-  const file=`${dir}/crm-${Date.now()}-${process.pid}.db`;
-  let db=openDb(file);
+  const file = `${dir}/crm-${Date.now()}-${process.pid}.db`;
+  let db = new DatabaseSync(file);
+  db.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   db.prepare("INSERT INTO requests (id,reference,type,payload,created_at,updated_at) VALUES (1,'SYNTHETIC-CRM','flight','{}',?,?)").run(now,now);
   const department = db.prepare('SELECT id FROM departments LIMIT 1').get().id;
   db.prepare('UPDATE requests SET department_id=?, department=? WHERE id=1').run(department,db.prepare('SELECT name FROM departments WHERE id=?').get(department).name);
@@ -69,12 +81,36 @@ test('phase05 migration: CRM database retains all business tables when n8n is ad
   db.prepare("INSERT INTO whatsapp_outbox (event_key,request_id,kind,recipient,template_payload,next_attempt_at,created_at) VALUES ('synthetic',1,'received','962790000001','{}',?,?)").run(now,now);
   db.prepare("INSERT INTO branches (code,name,created_at,updated_at) VALUES ('synthetic-branch','Synthetic branch',?,?)").run(now,now);
   // Recreate the CRM-only predecessor by removing only the n8n table in this synthetic DB.
-  db.exec('DROP TABLE webhook_deliveries');
-  const before=snapshot(db), backup=file.replace('.db','-before.db'); db.exec(`VACUUM INTO '${backup}'`);db.close();
-  db=openDb(file); assert.equal(tables(db).length,37);
-  for(const [table,records] of Object.entries(before)) assert.deepEqual(normalized(rows(db,table)),normalized(records),table);
-  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);db.close();
-  const restored=file.replace('.db','-restored.db');copyFileSync(backup,restored);
-  db=new DatabaseSync(restored);assert.deepEqual(normalized(snapshot(db)),normalized(before));db.close();
-  console.log('MIGRATION CRM: 36 -> 37; all 36 table contents retained; backup retained');
+
+  const before=snapshot(db), backup=file.replace('.db','-before.db');
+  db.exec(`VACUUM INTO '${backup}'`);
+  db.close();
+  db = openDb(file);
+  assert.equal(tables(db).length, 43);
+  for (const [table, records] of Object.entries(before)) {
+    if (table === "role_definitions") {
+      for (const record of records) {
+        const after = db
+          .prepare("SELECT * FROM role_definitions WHERE role_key=?")
+          .get(record.role_key);
+        for (const key of Object.keys(record)) {
+          if (key === "permissions")
+            for (const grant of JSON.parse(record.permissions))
+              assert.ok(JSON.parse(after.permissions).includes(grant));
+          else assert.equal(after[key], record[key]);
+        }
+      }
+    } else
+      assert.deepEqual(normalized(rows(db,table)),normalized(records),table);
+  }
+  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);
+  db.close();
+  const restored = file.replace(".db", "-restored.db");
+  copyFileSync(backup, restored);
+  db = new DatabaseSync(restored);
+  assert.deepEqual(normalized(snapshot(db)),normalized(before));
+  db.close();
+  console.log(
+    "MIGRATION CRM: 36 -> 43; all 36 table contents retained; backup retained",
+  );
 });

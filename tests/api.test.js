@@ -1,9 +1,10 @@
-import test, { before, after } from 'node:test';
-import assert from 'node:assert/strict';
-import { rmSync, readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { createApp } from '../server.js';
-import { STATUSES } from '../lib/domain.js';
+import { staffLogin } from "./helpers/staff-auth.mjs";
+import test, { before, after } from "node:test";
+import assert from "node:assert/strict";
+import { rmSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { createApp } from "../server.js";
+import { STATUSES } from "../lib/domain.js";
 
 const DB = `data/test-${randomBytes(4).toString('hex')}.db`;
 let app;
@@ -14,11 +15,11 @@ const otpInbox = new Map();
 
 const seed = JSON.parse(readFileSync('data/seed.json', 'utf8'));
 adminUser = seed.users[0].username;
-adminPass = 'Test-Only-Admin-Password-42';
+adminPass = "Test-Only-Admin-Password-42";
 const testSeed = { ...seed, users: seed.users.map(({ password, ...user }) => user) };
 
-let adminCookie = '';
-let agentCookie = '';
+let adminCookie = "";
+let agentCookie = "";
 
 async function call(path, { method = 'GET', body, cookie, headers = {}, origin } = {}) {
   const res = await fetch(`${base}${path}`, {
@@ -39,20 +40,9 @@ async function call(path, { method = 'GET', body, cookie, headers = {}, origin }
 }
 
 const login = async (username, password) => {
-  let result = await call('/api/auth/login', { method: 'POST', body: { username, password } });
-  const firstCookie = (result.res.headers.get('set-cookie') || '').split(';')[0];
-  if (result.payload.user?.mustChange) {
-    const next = `${password}-Changed42`;
-    const blocked = await call('/api/admin/overview', { cookie: firstCookie });
-    assert.equal(blocked.res.status, 403);
-    const changed = await call('/api/auth/change-password', { method: 'POST', cookie: firstCookie,
-      body: { currentPassword: password, newPassword: next } });
-    assert.equal(changed.res.status, 200);
-    assert.equal((await call('/api/admin/overview', { cookie: firstCookie })).res.status, 401);
-    if (username === adminUser) adminPass = next;
-    result = await call('/api/auth/login', { method: 'POST', body: { username, password: next } });
-  }
-  return { ...result, cookie: (result.res.headers.get('set-cookie') || '').split(';')[0] };
+  const result = await staffLogin(base, username, password);
+  if (username === adminUser) adminPass = result.password;
+  return result;
 };
 
 const clientLogin = async (email, password) => {
@@ -271,13 +261,19 @@ test('تقارير الأداء اليومية والأسبوعية والشهر
   assert.match(String(csv.payload), /الموظف/);
 });
 
-test('الموظف لا يصل إلى تقارير الأداء', async () => {
+test("الموظف لا يصل إلى تقارير الأداء", async () => {
   if (!adminCookie) adminCookie = (await login(adminUser, adminPass)).cookie;
-  const agentPass = ['Agent', 'Pass', '123'].join('');
+  const agentPass = ["Agent", "Pass", "1234"].join("");
   const uname = `agent_rep_${Date.now().toString(36)}`;
-  const created = await call('/api/admin/users', {
-    method: 'POST', cookie: adminCookie,
-    body: { username: uname, name: 'موظف تقارير', role: 'agent', password: 'AgentPass123' },
+  const created = await call("/api/admin/users", {
+    method: "POST",
+    cookie: adminCookie,
+    body: {
+      username: uname,
+      name: "موظف تقارير",
+      role: "agent",
+      password: "AgentPass1234",
+    },
   });
   assert.equal(created.res.status, 201);
   const session = await login(uname, agentPass);
@@ -486,11 +482,23 @@ test('صلاحيات النطاق والتحويل لا تكشف الطلبات 
   assert.equal(deptA.res.status, 201);
   assert.equal(deptB.res.status, 201);
 
-  const role = await call('/api/admin/roles', {
-    method: 'POST', cookie: adminCookie,
+  const role = await call("/api/admin/roles", {
+    method: "POST",
+    cookie: adminCookie,
     body: {
-      roleKey: 'crm_test_department', name: 'دور قسم للاختبار', baseRole: 'agent', dataScope: 'department',
-      permissions: ['overview:read', 'requests:read', 'requests:write', 'customers:read'],
+      roleKey: "crm_test_department",
+      name: "دور قسم للاختبار",
+      baseRole: "agent",
+      dataScope: "department",
+      permissions: [
+        "overview:read",
+        "requests:read",
+        "requests:write",
+        "requests:transfer",
+        "requests:assign",
+        "requests:approve",
+        "customers:read",
+      ],
     },
   });
   assert.equal(role.res.status, 201);
@@ -599,14 +607,21 @@ test('قيمة عرض سالبة تُرفض', async () => {
   assert.equal(res.status, 422);
 });
 
-test('الموظف يرى الطلبات ولا يستطيع إدارة البرامج أو المستخدمين', async () => {
-  const agentPass = ['Agent', 'Pass', '123'].join('');
-  const created = await call('/api/admin/users', {
-    method: 'POST', cookie: adminCookie,
-    body: { username: 'agent1', name: 'موظف اختبار', role: 'agent', department: 'تذاكر الطيران', password: 'AgentPass123' },
+test("الموظف يرى الطلبات ولا يستطيع إدارة البرامج أو المستخدمين", async () => {
+  const agentPass = ["Agent", "Pass", "1234"].join("");
+  const created = await call("/api/admin/users", {
+    method: "POST",
+    cookie: adminCookie,
+    body: {
+      username: "agent1",
+      name: "موظف اختبار",
+      role: "agent",
+      department: "تذاكر الطيران",
+      password: "AgentPass1234",
+    },
   });
   assert.equal(created.res.status, 201);
-  const session = await login('agent1', agentPass);
+  const session = await login("agent1", agentPass);
   assert.equal(session.res.status, 200);
   agentCookie = session.cookie;
 

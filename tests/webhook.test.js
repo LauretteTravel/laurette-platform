@@ -1,10 +1,11 @@
-import test, { before, after } from 'node:test';
-import assert from 'node:assert/strict';
-import http from 'node:http';
-import { rmSync, readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { createApp } from '../server.js';
-import { openDb } from '../lib/db.js';
+import { staffLogin } from "./helpers/staff-auth.mjs";
+import test, { before, after } from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import { rmSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { createApp } from "../server.js";
+import { openDb } from "../lib/db.js";
 import { notifyBooking, signPayload, verifySignature, webhookConfig } from '../lib/webhooks.js';
 
 const RECEIVED = [];
@@ -198,8 +199,8 @@ test('الموقع يُطلق الإرسال فعليًا عند إنشاء طل
 test('تغيير الحالة يُرسل booking.status_changed مع from/to و closed', async () => {
   RECEIVED.length = 0;
   process.env.N8N_BOOKING_WEBHOOK_URL = receiverUrl;
-  process.env.N8N_BOOKING_WEBHOOK_SECRET = 'status-secret';
-  process.env.N8N_API_KEY = 'proxy-key-123';
+  process.env.N8N_BOOKING_WEBHOOK_SECRET = "status-secret";
+  process.env.N8N_API_KEY = "proxy-key-123";
 
   const dbFile = `data/test-${randomBytes(4).toString('hex')}.db`;
   const seedFile = JSON.parse(readFileSync('data/seed.json', 'utf8'));
@@ -210,27 +211,16 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
     adminPassword: 'Test-Only-Admin-Password-42',
     sendVerificationEmail: async () => {},
   });
-  const addr = await app.listen(0, '127.0.0.1');
+  const addr = await app.listen(0, "127.0.0.1");
   const base = `http://127.0.0.1:${addr.port}`;
 
-  const login = await fetch(`${base}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
-    body: JSON.stringify({ username: 'laurette', password: 'Test-Only-Admin-Password-42' }),
-  });
-  let cookie = (login.headers.get('set-cookie') || '').split(';')[0];
-  assert.equal(login.status, 200);
-  if ((await login.json()).user.mustChange) {
-    const changed = await fetch(`${base}/api/auth/change-password`, { method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base, cookie },
-      body: JSON.stringify({ currentPassword: 'Test-Only-Admin-Password-42', newPassword: 'Changed-Admin-Password-43' }) });
-    assert.equal(changed.status, 200);
-    const again = await fetch(`${base}/api/auth/login`, { method: 'POST',
-      headers: { 'content-type': 'application/json', origin: base },
-      body: JSON.stringify({ username: 'laurette', password: 'Changed-Admin-Password-43' }) });
-    assert.equal(again.status, 200);
-    cookie = (again.headers.get('set-cookie') || '').split(';')[0];
-  }
+  const session = await staffLogin(
+    base,
+    "laurette",
+    "Test-Only-Admin-Password-42",
+  );
+  const cookie = session.cookie;
+  assert.equal(session.res.status, 200);
 
   const created = await fetch(`${base}/api/requests`, {
     method: 'POST',
@@ -254,9 +244,9 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
     await new Promise((r) => setTimeout(r, 100));
     statusEvent = RECEIVED.find((r) => r.body?.reference === reference && r.body?.event === 'booking.status_changed') || null;
   }
-  assert.ok(statusEvent, 'لم يُرسل حدث تغيير الحالة');
-  assert.equal(statusEvent.body.from, 'new');
-  assert.equal(statusEvent.body.to, 'quoted');
+  assert.ok(statusEvent, "لم يُرسل حدث تغيير الحالة");
+  assert.equal(statusEvent.body.from, "new");
+  assert.equal(statusEvent.body.to, "quoted");
   assert.equal(statusEvent.body.closed, false);
   assert.equal(statusEvent.headers['x-api-key'], 'proxy-key-123', 'ترويسة الوسيط X-API-Key مفقودة');
   assert.ok(verifySignature({
@@ -279,7 +269,7 @@ test('تغيير الحالة يُرسل booking.status_changed مع from/to و 
     await new Promise((r) => setTimeout(r, 100));
     closedEvent = RECEIVED.find((r) => r.body?.reference === reference && r.body?.to === 'confirmed') || null;
   }
-  assert.ok(closedEvent, 'لم يُرسل حدث الإغلاق');
+  assert.ok(closedEvent, "لم يُرسل حدث الإغلاق");
   assert.equal(closedEvent.body.closed, true);
 
   const logged = app.db.prepare("SELECT COUNT(*) n FROM webhook_deliveries WHERE reference = ? AND event = 'booking.status_changed'").get(reference);
