@@ -168,6 +168,7 @@
   /* ---------------- shell ---------------- */
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
+    {id:'deadlines',label:'المواعيد وعبء العمل',icon:'◴',permission:'tasks:read'},
     { id:'tasks',label:'مهامي والفريق',icon:'☑',permission:'tasks:read' },
     { id: 'followups', label: 'متابعاتي', icon: '◷', permission: 'requests:read' },
     { id: 'requests', label: 'صندوق الطلبات', icon: '✉', permission: 'requests:read' },
@@ -192,7 +193,7 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -332,7 +333,7 @@
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
     const map = {
-      overview: renderOverview, requests: renderRequests, tasks: renderTasks, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
+      overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
@@ -402,6 +403,142 @@
     });
   }
 
+
+  /* ---------------- deadlines and workload ---------------- */
+  const DEADLINE_KIND = {
+    soon: "قرب الموعد",
+    overdue: "متأخر",
+    escalated: "تصعيد إلى المشرف",
+  };
+  async function renderDeadlines(owner = "", page = 1) {
+    const view = $("#view");
+    try {
+      const data = await api(
+        "/api/admin/deadlines?" +
+          new URLSearchParams({
+            ...(owner ? { owner } : {}),
+            page: String(page),
+          }),
+      );
+      if (state.section !== "deadlines") return;
+      const alerts = await api("/api/admin/deadline-alerts");
+      if (state.section !== "deadlines") return;
+      view.innerHTML = `<div class="toolbar"><button class="btn btn-primary" data-deadline-alerts>تنبيهاتي (${num(alerts.unread)})</button><button class="btn btn-ghost" data-deadline-refresh>تحديث / كل المسؤولين</button>${hasPermission("organization:write") ? '<button class="btn btn-ghost" data-deadline-policy>سياسة التنبيهات</button>' : ""}</div><p class="muted">التنبيهات التلقائية ${data.policy.enabled ? "مفعلة" : "متوقفة"} · قرب الموعد ${num(data.policy.soonMinutes)} دقيقة · التصعيد بعد ${num(data.policy.escalateMinutes)} دقيقة تأخير. المواعيد بتوقيت عمّان.</p><h2>عبء العمل ضمن نطاقي</h2><p class="muted">أعداد المهام والمتابعات المفتوحة المسندة، وليست تقدير ساعات أو أداء الموظف. اضغط اسم المسؤول لعرض مواعيده.</p><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>المسؤول</th><th>مفتوحة</th><th>متأخرة</th><th>قريبة</th></tr></thead><tbody>${data.rows.map((r) => `<tr><td><button class="btn btn-ghost" data-workload-owner="${r.owner_id ?? "unassigned"}">${esc(r.owner_name || "غير مسند")}${r.active === 0 ? " (حساب معطل)" : ""}</button></td><td>${num(r.open)}</td><td>${num(r.overdue)}</td><td>${num(r.soon)}</td></tr>`).join("") || '<tr><td colspan="4">لا توجد عناصر مفتوحة ضمن نطاقك.</td></tr>'}</tbody></table></div></div><h2>المتأخر والقريب من الموعد</h2><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>العنصر</th><th>النوع</th><th>المسؤول</th><th>الموعد</th></tr></thead><tbody>${data.due.map((r) => `<tr><td><button class="btn btn-ghost" data-deadline-open="${r.entity}:${r.id}:${r.request_id || ""}">${esc(r.title)}</button></td><td>${r.entity === "task" ? "مهمة" : "متابعة طلب"}</td><td>${esc(r.owner_name || "غير مسند")}</td><td>${followDate(r.due_at)}</td></tr>`).join("") || '<tr><td colspan="4">لا توجد مواعيد قريبة أو متأخرة.</td></tr>'}</tbody></table></div></div><div class="btn-row mt-3"><button class="btn btn-ghost" data-deadline-prev ${page <= 1 ? "disabled" : ""}>السابق</button><span>${page}/${data.pages} · ${num(data.total)} عنصر</span><button class="btn btn-ghost" data-deadline-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`;
+      $("[data-deadline-alerts]", view).onclick = () => openDeadlineAlerts();
+      $("[data-deadline-refresh]", view).onclick = () => renderDeadlines();
+      $("[data-deadline-policy]", view)?.addEventListener(
+        "click",
+        openDeadlinePolicy,
+      );
+      $$("[data-workload-owner]", view).forEach(
+        (b) => (b.onclick = () => renderDeadlines(b.dataset.workloadOwner)),
+      );
+      $$("[data-deadline-open]", view).forEach(
+        (b) =>
+          (b.onclick = () => {
+            const [kind, id, requestId] = b.dataset.deadlineOpen.split(":");
+            kind === "task"
+              ? openTask(Number(id))
+              : openRequest(Number(requestId));
+          }),
+      );
+      $("[data-deadline-prev]", view).onclick = () =>
+        renderDeadlines(owner, page - 1);
+      $("[data-deadline-next]", view).onclick = () =>
+        renderDeadlines(owner, page + 1);
+    } catch (error) {
+      if (state.section === "deadlines") {
+        view.innerHTML = `<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-deadline-retry>إعادة المحاولة</button>`;
+        $("[data-deadline-retry]", view).onclick = () =>
+          renderDeadlines(owner, page);
+      }
+    }
+  }
+  async function openDeadlineAlerts(page = 1) {
+    try {
+      const data = await api("/api/admin/deadline-alerts?page=" + page);
+      openDrawer(
+        `<div class="drawer-head"><h2>تنبيهات المواعيد</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · ${page}/${data.pages}</p><ul class="timeline">${data.alerts.map((a) => `<li><b>${esc(DEADLINE_KIND[a.kind])}</b><button class="btn btn-ghost" data-operation-alert="${a.id}" data-entity="${a.entity}" data-id="${a.entity_id}" data-request="${a.request_id || ""}">${a.read_at ? "" : "● "}${esc(a.title)}</button><span>الموعد: ${followDate(a.due_at)}</span></li>`).join("") || "<li>لا توجد تنبيهات نشطة مخولة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-alert-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-alert-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
+      );
+      $$("[data-operation-alert]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            try {
+              await api(
+                "/api/admin/deadline-alerts/" +
+                  b.dataset.operationAlert +
+                  "/read",
+                { method: "POST" },
+              );
+              b.dataset.entity === "task"
+                ? openTask(Number(b.dataset.id))
+                : openRequest(Number(b.dataset.request));
+            } catch (e) {
+              toast(e.message, "bad");
+            }
+          }),
+      );
+      $("[data-alert-prev]").onclick = () => openDeadlineAlerts(page - 1);
+      $("[data-alert-next]").onclick = () => openDeadlineAlerts(page + 1);
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function openDeadlinePolicy() {
+    try {
+      const data = await api("/api/admin/deadline-policy"),
+        p = data.policy;
+      openDrawer(
+        `<div class="drawer-head"><h2>سياسة تنبيهات المواعيد</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>التفعيل ينشئ تنبيهات داخلية فقط. التصعيد للمدير المباشر النشط والمخول أصلًا في ملف الموظف؛ لن يغير حالة أو مسؤولية العنصر.</p><p class="muted">آخر تشغيل: ${data.health ? followDate(data.health.at) : "لم يعمل بعد"}${data.health ? ` · أُنشئ ${num(data.health.created)} تنبيهًا · تعذر توجيه ${num(data.health.unroutable)}` : ""}</p><form id="deadlinePolicyForm" class="stack"><label><input name="enabled" type="checkbox" ${p.enabled ? "checked" : ""}> تفعيل التشغيل التلقائي كل دقيقة</label><label>تنبيه قبل الموعد (دقائق)<input name="soonMinutes" type="number" min="15" max="1440" value="${p.soonMinutes}" required></label><label>التصعيد بعد التأخير (دقائق)<input name="escalateMinutes" type="number" min="60" max="10080" value="${p.escalateMinutes}" required></label><label>سبب التغيير<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ السياسة</button></form><button class="btn btn-ghost mt-3" data-run-deadlines>تشغيل دورة الآن وفق السياسة المحفوظة</button>`,
+      );
+      $("#deadlinePolicyForm").onsubmit = async (event) => {
+        event.preventDefault();
+        const form = event.target,
+          button = form.querySelector("button");
+        button.disabled = true;
+        try {
+          await api("/api/admin/deadline-policy", {
+            method: "POST",
+            body: JSON.stringify({
+              enabled: form.elements.enabled.checked,
+              soonMinutes: Number(form.elements.soonMinutes.value),
+              escalateMinutes: Number(form.elements.escalateMinutes.value),
+              reason: form.elements.reason.value,
+              revision: p.revision,
+            }),
+          });
+          toast("حُفظت السياسة");
+          openDeadlinePolicy();
+          renderDeadlines();
+        } catch (e) {
+          form.querySelector('[role="status"]').textContent = e.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+      $("[data-run-deadlines]").onclick = async (event) => {
+        event.target.disabled = true;
+        try {
+          const result = await api("/api/admin/deadlines/run", {
+            method: "POST",
+          });
+          toast(
+            result.result.enabled
+              ? `أُنشئ ${num(result.result.created)} تنبيهًا`
+              : "المجدول متوقف وفق السياسة",
+          );
+          openDeadlinePolicy();
+          renderDeadlines();
+        } catch (e) {
+          toast(e.message, "bad");
+        } finally {
+          event.target.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
 
   /* ---------------- tasks and internal notifications ---------------- */
   const TASK_STATUS = {

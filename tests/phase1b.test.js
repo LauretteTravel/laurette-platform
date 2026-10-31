@@ -122,8 +122,8 @@ test("1B migrations: WAL snapshot precedes upgrade; profiles backfill without re
   const original = { ...raw.prepare("SELECT * FROM users").get() };
   raw.close();
   let migrated = openDb(file);
-  assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 4);
-  assert.equal(migrated.migrationBackups.length, 4);
+  assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 5);
+  assert.equal(migrated.migrationBackups.length, 5);
   const backups = [...migrated.migrationBackups];
   assert.deepEqual(
     { ...migrated.prepare("SELECT * FROM users").get() },

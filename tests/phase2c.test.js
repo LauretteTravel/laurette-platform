@@ -326,7 +326,7 @@ test("2C version3 snapshot restores exactly and blobs survive reopen with metada
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let d = openDb(file);
-  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 4);
+  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 5);
   const prior = d.migrationBackups[3];
   d.close();
   const restore = file + ".v3";
@@ -338,7 +338,7 @@ test("2C version3 snapshot restores exactly and blobs survive reopen with metada
     .all();
   raw.close();
   d = openDb(restore);
-  assert.equal(d.migrationBackups.length, 1);
+  assert.equal(d.migrationBackups.length, 2);
   assert.deepEqual(
     d
       .prepare(
