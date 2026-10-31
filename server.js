@@ -1,3 +1,4 @@
+import * as DEADLINES from './lib/deadlines.js';
 import * as ATTACHMENTS from './lib/task-attachments.js';
 import * as TASKS from './lib/tasks-api.js';
 import * as FOLLOW_UPS from './lib/follow-ups.js';
@@ -254,6 +255,12 @@ export function createApp(options = {}) {
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
 
+  router.get('/api/admin/deadlines',api(DEADLINES.deadlineDashboard,{action:'tasks:read'}));
+  router.get('/api/admin/deadline-alerts',api(DEADLINES.deadlineAlerts,{action:'tasks:read'}));
+  router.post('/api/admin/deadline-alerts/:id/read',api(DEADLINES.readDeadlineAlert,{action:'tasks:read'}));
+  router.get('/api/admin/deadline-policy',api(DEADLINES.getDeadlinePolicy,{action:'organization:write'}));
+  router.post('/api/admin/deadline-policy',api(DEADLINES.setDeadlinePolicy,{action:'organization:write'}));
+  router.post('/api/admin/deadlines/run',api(DEADLINES.runDeadlines,{action:'organization:write'}));
   router.get('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.listAttachments,{action:'tasks:read'}));
   router.post('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.uploadAttachment,{action:'tasks:write'}));
   router.get('/api/admin/task-attachments/:id',api(ATTACHMENTS.downloadAttachment,{action:'tasks:read'}));
@@ -587,6 +594,8 @@ export function createApp(options = {}) {
     return sendHtml(ctx, err.status || 500, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   }
 
+  const deadlineWorker=setInterval(()=>{try{DEADLINES.runDeadlineJob(db);}catch{console.error('[deadlines] Scheduler failed; inspect database and policy');}},60000);
+  deadlineWorker.unref();
   const server = http.createServer((req, res) => {
     res.on('finish', () => {
       if (process.env.LOG_REQUESTS === '1') console.log(`${req.method} ${req.url} ${res.statusCode}`);
@@ -609,6 +618,7 @@ export function createApp(options = {}) {
       });
     },
     close() {
+      clearInterval(deadlineWorker);
       if (whatsappWorker) clearInterval(whatsappWorker);
       return new Promise((resolvePromise) => {
         server.close(() => {
