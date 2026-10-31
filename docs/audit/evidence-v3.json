@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-31",
+  "sourceCommit": "882d5bb729047dc0a44f7602b01d961ac038d53d",
+  "scope": "Synthetic local DB; anonymous production GET only",
+  "inventory": {
+    "tables": 37,
+    "tableNames": [
+      "airlines",
+      "articles",
+      "assistant_messages",
+      "assistant_sessions",
+      "audit_log",
+      "booking_payments",
+      "bookings",
+      "branches",
+      "client_sessions",
+      "clients",
+      "customers",
+      "department_aliases",
+      "departments",
+      "destinations",
+      "faq",
+      "hotel_guides",
+      "kb_docs",
+      "meta",
+      "news",
+      "offers",
+      "programs",
+      "request_events",
+      "request_follow_ups",
+      "request_owner_history",
+      "request_quotes",
+      "request_transfers",
+      "requests",
+      "reviews",
+      "role_definitions",
+      "sessions",
+      "settings",
+      "tracking_events",
+      "trip_ideas",
+      "users",
+      "visa_rules",
+      "webhook_deliveries",
+      "whatsapp_outbox"
+    ],
+    "roleDefinitions": 5,
+    "permissionCodes": 16,
+    "staticRouterRegistrations": 85,
+    "referencedApiHandlers": 43,
+    "userVersion": 0,
+    "integrity": "ok",
+    "fkErrors": 0
+  },
+  "syntheticProbes": [
+    {
+      "id": "P1-SQL-UPDATE",
+      "status": 500
+    },
+    {
+      "id": "P1-SQL-TRANSFER",
+      "status": 500
+    },
+    {
+      "id": "P1-SQL-CUSTOMER",
+      "status": 500
+    },
+    {
+      "id": "P1-WEBHOOK-SCOPE",
+      "status": 200,
+      "otherBranchReferenceVisible": true
+    },
+    {
+      "id": "P1-CROSS-BRANCH-TRANSFER",
+      "status": 200,
+      "actorBranch": 1,
+      "intendedBranch": 2
+    }
+  ],
+  "verification": {
+    "tests": {
+      "passed": 86,
+      "failed": 0,
+      "skipped": 0
+    },
+    "localSmoke": {
+      "passed": 27,
+      "failed": 0
+    },
+    "productionGet": [
+      {
+        "path": "/health",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/admin",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/account",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/account/profile",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/track",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/programs",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/programs/print",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/offers",
+        "status": 200,
+        "expected": 200
+      },
+      {
+        "path": "/api/admin/organization",
+        "status": 401,
+        "expected": 401
+      },
+      {
+        "path": "/api/admin/users",
+        "status": 401,
+        "expected": 401
+      },
+      {
+        "path": "/api/admin/transfers",
+        "status": 401,
+        "expected": 401
+      },
+      {
+        "path": "/assets/js/admin.js",
+        "status": 200,
+        "matchesAuditedSource": true
+      },
+      {
+        "path": "/assets/js/app.js",
+        "status": 200,
+        "matchesAuditedSource": true
+      }
+    ]
+  }
+}
