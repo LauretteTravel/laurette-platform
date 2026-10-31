@@ -1,3 +1,4 @@
+import * as FOLLOW_UPS from './lib/follow-ups.js';
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -252,6 +253,10 @@ export function createApp(options = {}) {
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
 
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
+  router.get('/api/admin/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
+  router.get('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
+  router.post('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.createFollowUp, { action: 'requests:write' }));
+  router.post('/api/admin/follow-ups/:id/finish', api(FOLLOW_UPS.finishFollowUp, { action: 'requests:write' }));
   router.get('/api/admin/requests', api(API.listRequests, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id', api(API.getRequest, { action: 'requests:read' }));
   router.patch('/api/admin/requests/:id', api(API.updateRequest, { action: 'requests:write' }));

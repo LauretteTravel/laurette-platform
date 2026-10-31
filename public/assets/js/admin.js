@@ -18,6 +18,7 @@
       manager: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'programs:write', 'content:write', 'visa:write', 'kb:write', 'audit:read', 'overview:read', 'reports:read'],
       agent: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'overview:read', 'kb:write'],
     };
+    if (permission === 'requests:assign') permission = 'requests:write';
     return (legacy[state.user?.role] || []).includes(permission);
   }
 
@@ -163,7 +164,8 @@
   /* ---------------- shell ---------------- */
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
-    { id: 'requests', label: 'الطلبات', icon: '✉', permission: 'requests:read' },
+    { id: 'followups', label: 'متابعاتي', icon: '◷', permission: 'requests:read' },
+    { id: 'requests', label: 'صندوق الطلبات', icon: '✉', permission: 'requests:read' },
     { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
@@ -185,7 +187,7 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'followups', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -323,7 +325,7 @@
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
     const map = {
-      overview: renderOverview, requests: renderRequests, customers: renderCustomers, programs: renderPrograms,
+      overview: renderOverview, requests: renderRequests, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
@@ -393,6 +395,62 @@
     });
   }
 
+
+  /* ---------------- scoped request follow-ups ---------------- */
+  const FOLLOW_STATUS = { open: 'مفتوحة', done: 'مكتملة', cancelled: 'ملغاة' };
+  const followDate = (iso) => new Date(iso).toLocaleString('ar-JO', { timeZone:'Asia/Amman', dateStyle:'short', timeStyle:'short' });
+  function followRows(data) {
+    return `<p class="muted">المواعيد المعروضة بتوقيت عمّان · ${num(data.total)} متابعة · ${data.page}/${data.pages}</p>
+      <div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>الطلب</th><th>المتابعة</th><th>المسؤول</th><th>الموعد</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
+      ${data.followUps.map((f) => `<tr><td><button class="btn btn-ghost btn-sm ref" data-follow-request="${f.request_id}">${esc(f.reference)}</button></td><td style="white-space:pre-wrap">${esc(f.note)}</td><td>${esc(f.assignee_name || 'غير متاح')}</td><td>${esc(followDate(f.due_at))}${f.overdue ? '<br><span class="badge badge-danger">متأخرة</span>' : ''}</td><td>${esc(FOLLOW_STATUS[f.status])}</td><td>${f.status === 'open' && hasPermission('requests:write') && (f.assigned_to === state.user.id || hasPermission('requests:assign')) ? `<button class="btn btn-primary btn-sm" data-follow-finish="${f.id}" data-result="done">إكمال</button> <button class="btn btn-ghost btn-sm" data-follow-finish="${f.id}" data-result="cancelled">إلغاء</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6">لا توجد متابعات مطابقة.</td></tr>'}
+      </tbody></table></div></div>`;
+  }
+  function bindFollowRows(container, data, refresh) {
+    $$('[data-follow-request]',container).forEach((b) => b.onclick = () => openRequest(Number(b.dataset.followRequest)));
+    $$('[data-follow-finish]',container).forEach((b) => b.onclick = () => {
+      const item = data.followUps.find((f) => f.id === Number(b.dataset.followFinish));
+      openDrawer(`<div class="drawer-head"><h2>${b.dataset.result === 'done' ? 'إكمال المتابعة' : 'إلغاء المتابعة'}</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${esc(item.note)}</p><form id="followFinishForm" class="stack"><label>النتيجة أو سبب الإلغاء<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ</button></form>`);
+      $('#followFinishForm').onsubmit = async (event) => {
+        event.preventDefault(); const button = event.target.querySelector('button'); button.disabled = true;
+        try { await api(`/api/admin/follow-ups/${item.id}/finish`, {method:'POST',body:JSON.stringify({status:b.dataset.result,reason:new FormData(event.target).get('reason')})}); closeDrawer(); toast('تم حفظ نتيجة المتابعة'); refresh(); }
+        catch(error) { event.target.querySelector('[role="status"]').textContent=error.message; }
+        finally { button.disabled=false; }
+      };
+    });
+  }
+  async function loadRequestFollowUps(id, page=1) {
+    const slot = $('#requestFollowUps'); if (!slot) return;
+    slot.innerHTML = '<p role="status">جارٍ تحميل المتابعات…</p>';
+    try {
+      const data = await api(`/api/admin/requests/${id}/follow-ups?status=all&page=${page}`);
+      if (!slot.isConnected) return;
+      slot.innerHTML = `<h3>متابعات الطلب</h3>${followRows(data)}<div class="btn-row"><button class="btn btn-ghost btn-sm" data-prev ${page<=1?'disabled':''}>السابق</button><button class="btn btn-ghost btn-sm" data-next ${page>=data.pages?'disabled':''}>التالي</button></div>
+        ${hasPermission('requests:write') ? `<form id="followCreateForm" class="stack mt-3"><label>وصف المتابعة<textarea name="note" required minlength="3" maxlength="2000"></textarea></label><label>الموعد بتوقيت جهازك (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)})<input type="datetime-local" name="dueAt" required></label><label>مسؤول المتابعة<select name="assignedTo">${data.assignees.map((u)=>`<option value="${u.id}" ${u.id===state.user.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary btn-sm">إضافة متابعة</button></form>` : ''}`;
+      bindFollowRows(slot,data,()=>openRequest(id));
+      $('[data-prev]',slot).onclick=()=>loadRequestFollowUps(id,page-1);
+      $('[data-next]',slot).onclick=()=>loadRequestFollowUps(id,page+1);
+      $('#followCreateForm')?.addEventListener('submit',async(event)=>{
+        event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;
+        try { const body=Object.fromEntries(new FormData(event.target)); body.dueAt=new Date(body.dueAt).toISOString(); await api(`/api/admin/requests/${id}/follow-ups`,{method:'POST',body:JSON.stringify(body)}); toast('أُضيفت المتابعة'); loadRequestFollowUps(id); }
+        catch(error) { event.target.querySelector('[role="status"]').textContent=error.message; }
+        finally { button.disabled=false; }
+      });
+    } catch(error) { if(slot.isConnected) slot.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost btn-sm" data-retry-follow>إعادة المحاولة</button>`; $('[data-retry-follow]',slot)?.addEventListener('click',()=>loadRequestFollowUps(id,page)); }
+  }
+  async function renderFollowUps(page=1) {
+    const view=$('#view');
+    try {
+      const params=new URLSearchParams({...state.query,page:String(page)});
+      const data=await api(`/api/admin/follow-ups?${params}`);
+      if(state.section!=='followups') return;
+      view.innerHTML=`<div class="toolbar"><label>الحالة<select data-follow-filter="status">${[['open','مفتوحة'],['done','مكتملة'],['cancelled','ملغاة'],['all','كل الحالات']].map(([k,v])=>`<option value="${k}" ${(state.query.status||'open')===k?'selected':''}>${v}</option>`).join('')}</select></label><label>الموعد<select data-follow-filter="due"><option value="">كل المواعيد</option><option value="overdue" ${state.query.due==='overdue'?'selected':''}>متأخرة</option><option value="next24h" ${state.query.due==='next24h'?'selected':''}>خلال 24 ساعة</option></select></label>${hasPermission('requests:assign')?`<label>المسؤول<select data-follow-filter="assigned"><option value="me">متابعاتي</option><option value="team" ${state.query.assigned==='team'?'selected':''}>الفريق ضمن نطاقي</option></select></label>`:''}<button class="btn btn-primary btn-sm" data-follow-apply>تصفية</button></div>${followRows(data)}<div class="btn-row mt-3"><button class="btn btn-ghost" data-prev ${page<=1?'disabled':''}>السابق</button><button class="btn btn-ghost" data-next ${page>=data.pages?'disabled':''}>التالي</button></div><p class="muted">لإضافة متابعة، افتح الطلب واختر «متابعات الطلب».</p>`;
+      bindFollowRows(view,data,()=>renderFollowUps(page));
+      $('[data-follow-apply]',view).onclick=()=>{ state.query={}; $$('[data-follow-filter]',view).forEach((el)=>{if(el.value)state.query[el.dataset.followFilter]=el.value;});renderFollowUps(); };
+      $('[data-prev]',view).onclick=()=>renderFollowUps(page-1);
+      $('[data-next]',view).onclick=()=>renderFollowUps(page+1);
+    } catch(error) { if(state.section==='followups') { view.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-retry-follow>إعادة المحاولة</button>`; $('[data-retry-follow]',view).onclick=()=>renderFollowUps(page); } }
+  }
+
   /* ---------------- requests ---------------- */
   async function renderRequests(page = 1) {
     const params = new URLSearchParams({ ...state.query, page: String(page) });
@@ -412,6 +470,7 @@
             <button class="btn btn-danger btn-sm" data-transfer-response="${transfer.id}" data-decision="reject">رفض</button>` : '—'}</td></tr>`).join('')}</tbody></table>
         </div></div>` : ''}
       <div class="toolbar">
+        <select data-filter="assigned" aria-label="إسناد الطلب"><option value="">كل الطلبات المخولة</option><option value="unassigned" ${state.query.assigned === 'unassigned' ? 'selected' : ''}>غير المخصصة</option><option value="me" ${state.query.assigned === 'me' ? 'selected' : ''}>المسندة لي</option></select>
         <select data-filter="type"><option value="">كل الأنواع</option>${Object.entries(data.types || {}).map(([k, t]) => `<option value="${k}" ${state.query.type === k ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
         <select data-filter="status"><option value="">كل الحالات</option>${Object.entries(data.statuses || {}).map(([k, v]) => `<option value="${k}" ${state.query.status === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
         <input data-filter="q" placeholder="بحث بالمرجع أو الاسم أو الهاتف" value="${esc(state.query.q || '')}">
@@ -563,12 +622,14 @@
       <div class="field"><textarea id="dNote" rows="3" placeholder="ملاحظة تظهر للفريق فقط"></textarea></div>
       <button class="btn btn-primary btn-sm mt-2" data-add-note>إضافة الملاحظة</button>` : ''}
       <hr>
+      <section id="requestFollowUps" aria-label="متابعات الطلب" aria-live="polite"></section><hr>
       <h3>السجل</h3>
       <ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.message || e.kind)}</b><span>${esc(e.actor_name || 'النظام')} · ${dt(e.created_at)}</span></li>`).join('')}</ul>
       <div class="btn-row mt-2"><button class="btn btn-gold btn-sm" type="button" data-voucher-admin>قسيمة الحجز</button></div>
       ${payload.phone ? `<div class="btn-row mt-3"><a class="btn btn-wa btn-sm" href="https://wa.me/${String(payload.phone).replace(/\D/g, '')}" target="_blank" rel="noopener">واتساب العميل</a><a class="btn btn-ghost btn-sm" href="tel:${esc(payload.phone)}">اتصال</a></div>` : ''}
     `);
 
+    loadRequestFollowUps(id);
     const refresh = () => { closeDrawer(); openRequest(id); };
     $('[data-voucher-admin]')?.addEventListener('click', () => {
       if (!window.VoucherGenerator) { toast('وحدة القسيمة لم تُحمّل. أعد تحميل الصفحة.', 'bad'); return; }
