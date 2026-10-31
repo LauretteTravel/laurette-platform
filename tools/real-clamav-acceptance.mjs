@@ -5,6 +5,9 @@ import {createApp} from '../server.js';
 import {createSession,hashPassword} from '../lib/auth.js';
 import {scanAttachment} from '../lib/attachment-scan.js';
 
+// Synthetic fixture only: opt into uploads without bypassing the real scanner.
+process.env.TASK_ATTACHMENT_UPLOADS_ENABLED='1';
+
 const port=Number(process.env.ATTACHMENT_CLAMD_PORT||3310);
 const command=(value)=>new Promise((resolve,reject)=>{const socket=connect({host:'127.0.0.1',port});let data='',settled=false;const done=(error,result)=>{if(settled)return;settled=true;socket.destroy();error?reject(error):resolve(result);};socket.setTimeout(2000,()=>done(new Error('clamd command timeout')));socket.on('error',error=>done(error));socket.on('connect',()=>socket.write('z'+value+'\0'));socket.on('data',chunk=>{data+=chunk.toString();if(data.length>4096)return done(new Error('Invalid clamd response'));if(data.includes('\0'))done(null,data.slice(0,data.indexOf('\0')));});socket.on('end',()=>{if(!settled)done(new Error('Incomplete clamd response'));});});
 let ready=false;

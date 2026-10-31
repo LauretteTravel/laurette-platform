@@ -19,6 +19,7 @@ let app,
   received,
   scanHook = null;
 const priorPort = process.env.ATTACHMENT_CLAMD_PORT;
+const priorUploadsEnabled = process.env.TASK_ATTACHMENT_UPLOADS_ENABLED;
 const pdf = Buffer.from("%PDF-1.7\nSynthetic document only\n%%EOF");
 const wav = Buffer.concat([
   Buffer.from("RIFF"),
@@ -160,11 +161,95 @@ after(async () => {
   await new Promise((resolve) => scanner.close(resolve));
   if (priorPort === undefined) delete process.env.ATTACHMENT_CLAMD_PORT;
   else process.env.ATTACHMENT_CLAMD_PORT = priorPort;
+  if (priorUploadsEnabled === undefined)
+    delete process.env.TASK_ATTACHMENT_UPLOADS_ENABLED;
+  else process.env.TASK_ATTACHMENT_UPLOADS_ENABLED = priorUploadsEnabled;
 });
 beforeEach(() => {
+  // Explicit fixture configuration; successful uploads still require AV scanning.
+  process.env.TASK_ATTACHMENT_UPLOADS_ENABLED = "1";
   mode = "clean";
   scanHook = null;
   app.limiter.reset();
+});
+
+test("2C upload gate defaults closed, preserves saved files and tasks, and never scans or writes when disabled", async () => {
+  const saved = await upload();
+  assert.equal(saved.status, 201);
+  const before = {
+    attachments: count(),
+    events: db.prepare("SELECT COUNT(*) n FROM task_events").get().n,
+    audit: db
+      .prepare(
+        "SELECT COUNT(*) n FROM audit_log WHERE action='attachment.upload'",
+      )
+      .get().n,
+    notifications: db
+      .prepare("SELECT COUNT(*) n FROM staff_notifications")
+      .get().n,
+  };
+  received = null;
+  for (const setting of [undefined, "0", "true", "yes", "", "1 "]) {
+    if (setting === undefined)
+      delete process.env.TASK_ATTACHMENT_UPLOADS_ENABLED;
+    else process.env.TASK_ATTACHMENT_UPLOADS_ENABLED = setting;
+    const list = await call(`/api/admin/tasks/${taskId}/attachments`);
+    assert.equal(list.status, 200);
+    assert.equal(list.data.uploadEnabled, false);
+    assert.ok(list.data.attachments.some((file) => file.id === saved.data.id));
+    assert.equal((await upload()).status, 503);
+    assert.equal(received, null);
+  }
+  const downloaded = await call(`/api/admin/task-attachments/${saved.data.id}`);
+  assert.equal(downloaded.status, 200);
+  assert.deepEqual(downloaded.bytes, pdf);
+  assert.equal((await call(`/api/admin/tasks/${taskId}`)).status, 200);
+  assert.equal((await upload({}, other)).status, 404);
+  assert.equal((await upload({}, null)).status, 401);
+  assert.equal(
+    (
+      await call(`/api/admin/tasks/${taskId}/attachments`, {
+        headers: { origin: "https://outside.invalid" },
+        body: {},
+      })
+    ).status,
+    403,
+  );
+  assert.deepEqual(
+    {
+      attachments: count(),
+      events: db.prepare("SELECT COUNT(*) n FROM task_events").get().n,
+      audit: db
+        .prepare(
+          "SELECT COUNT(*) n FROM audit_log WHERE action='attachment.upload'",
+        )
+        .get().n,
+      notifications: db
+        .prepare("SELECT COUNT(*) n FROM staff_notifications")
+        .get().n,
+    },
+    before,
+  );
+  process.env.TASK_ATTACHMENT_UPLOADS_ENABLED = "1";
+  assert.equal(
+    (await call(`/api/admin/tasks/${taskId}/attachments`)).data.uploadEnabled,
+    true,
+  );
+});
+
+test("2C disabling uploads during a successful scan prevents saving without bypassing fresh authorization", async () => {
+  const before = count(),
+    events = db.prepare("SELECT COUNT(*) n FROM task_events").get().n;
+  scanHook = () => {
+    process.env.TASK_ATTACHMENT_UPLOADS_ENABLED = "0";
+  };
+  assert.equal((await upload({ filename: "paused.pdf" })).status, 503);
+  assert.deepEqual(received, pdf);
+  assert.equal(count(), before);
+  assert.equal(
+    db.prepare("SELECT COUNT(*) n FROM task_events").get().n,
+    events,
+  );
 });
 
 test("2C scanned PDF uploads privately, deduplicates, and downloads exact bytes with secure headers", async () => {
@@ -289,8 +374,13 @@ test("2C type spoofing, active content, unsafe names, oversized payloads and CSR
     () => detectAttachment(Buffer.from('<svg onload="alert(1)"></svg>')),
     /الأنواع المدعومة/,
   );
-  const brokenJpeg=Buffer.alloc(20,255);brokenJpeg[1]=216;brokenJpeg[19]=217;
-  assert.throws(()=>detectAttachment(brokenJpeg),error=>error.status===422);
+  const brokenJpeg = Buffer.alloc(20, 255);
+  brokenJpeg[1] = 216;
+  brokenJpeg[19] = 217;
+  assert.throws(
+    () => detectAttachment(brokenJpeg),
+    (error) => error.status === 422,
+  );
 });
 test("2C access is checked again after scanning; a revoked session cannot persist the file", async () => {
   const before = count();
