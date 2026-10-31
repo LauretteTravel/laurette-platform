@@ -27,7 +27,7 @@ async function call(path, { method = 'GET', body, cookie, headers = {}, origin }
       ...(body ? { 'content-type': 'application/json' } : {}),
       ...(method !== 'GET' ? { 'x-requested-with': 'fetch' } : {}),
       ...(cookie ? { cookie } : {}),
-      ...(origin ? { origin } : {}),
+      ...(method !== 'GET' ? { origin: origin === undefined ? base : origin } : {}),
       ...headers,
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -39,8 +39,20 @@ async function call(path, { method = 'GET', body, cookie, headers = {}, origin }
 }
 
 const login = async (username, password) => {
-  const { res, payload } = await call('/api/auth/login', { method: 'POST', body: { username, password } });
-  return { res, payload, cookie: (res.headers.get('set-cookie') || '').split(';')[0] };
+  let result = await call('/api/auth/login', { method: 'POST', body: { username, password } });
+  const firstCookie = (result.res.headers.get('set-cookie') || '').split(';')[0];
+  if (result.payload.user?.mustChange) {
+    const next = `${password}-Changed42`;
+    const blocked = await call('/api/admin/overview', { cookie: firstCookie });
+    assert.equal(blocked.res.status, 403);
+    const changed = await call('/api/auth/change-password', { method: 'POST', cookie: firstCookie,
+      body: { currentPassword: password, newPassword: next } });
+    assert.equal(changed.res.status, 200);
+    assert.equal((await call('/api/admin/overview', { cookie: firstCookie })).res.status, 401);
+    if (username === adminUser) adminPass = next;
+    result = await call('/api/auth/login', { method: 'POST', body: { username, password: next } });
+  }
+  return { ...result, cookie: (result.res.headers.get('set-cookie') || '').split(';')[0] };
 };
 
 const clientLogin = async (email, password) => {
@@ -87,7 +99,7 @@ test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّم�
 });
 
 test('صفحات عامة أساسية تعمل وترجع 200', async () => {
-  for (const path of ['/programs', '/offers', '/programs/umrah-p1', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/destinations/mecca', '/guide', '/faq', '/track', '/account', '/account/profile', '/about', '/privacy', '/news', '/admin']) {
+  for (const path of ['/programs', '/programs/print', '/offers', '/programs/umrah-p1', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/destinations/mecca', '/guide', '/faq', '/track', '/account', '/account/profile', '/about', '/privacy', '/news', '/admin']) {
     const { res } = await call(path);
     assert.equal(res.status, 200, `فشل ${path}`);
   }
@@ -364,7 +376,7 @@ test('إنشاء طلب طيران يعيد رقماً مرجعياً ويُحف
   assert.ok(row);
   assert.equal(row.type, 'flight');
   assert.equal(row.status, 'new');
-  assert.equal(row.department, 'تذاكر الطيران');
+  assert.equal(row.department, 'قسم التذاكر');
   const customer = app.db.prepare('SELECT * FROM customers WHERE phone = ?').get('0790000001');
   assert.ok(customer);
 });
@@ -463,6 +475,83 @@ test('تسجيل دخول المدير يعيد جلسة httpOnly', async () => 
   assert.equal(me.payload.user.username, adminUser);
 });
 
+test('صلاحيات النطاق والتحويل لا تكشف الطلبات ولا تنقل الملكية قبل القبول', async () => {
+  const branchId = app.db.prepare("SELECT id FROM branches WHERE code = 'amman'").get().id;
+  const deptA = await call('/api/admin/departments', {
+    method: 'POST', cookie: adminCookie, body: { name: 'قسم اختبار A', branchId },
+  });
+  const deptB = await call('/api/admin/departments', {
+    method: 'POST', cookie: adminCookie, body: { name: 'قسم اختبار B', branchId },
+  });
+  assert.equal(deptA.res.status, 201);
+  assert.equal(deptB.res.status, 201);
+
+  const role = await call('/api/admin/roles', {
+    method: 'POST', cookie: adminCookie,
+    body: {
+      roleKey: 'crm_test_department', name: 'دور قسم للاختبار', baseRole: 'agent', dataScope: 'department',
+      permissions: ['overview:read', 'requests:read', 'requests:write', 'customers:read'],
+    },
+  });
+  assert.equal(role.res.status, 201);
+
+  for (const [username, departmentId] of [['crmtesta', deptA.payload.id], ['crmtestb', deptB.payload.id]]) {
+    const user = await call('/api/admin/users', {
+      method: 'POST', cookie: adminCookie,
+      body: { username, name: username, roleKey: 'crm_test_department', branchId, departmentId, password: 'ScopedUserPass123' },
+    });
+    assert.equal(user.res.status, 201, JSON.stringify(user.payload));
+  }
+
+  const requestA = await call('/api/requests', {
+    method: 'POST', body: { ...flightBody(), phone: '0790000881', destination: 'عمان-داخلي A' },
+  });
+  const requestB = await call('/api/requests', {
+    method: 'POST', body: { ...flightBody(), phone: '0790000882', destination: 'عمان-داخلي B' },
+  });
+  assert.equal(requestA.res.status, 201);
+  assert.equal(requestB.res.status, 201);
+  const rowA = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(requestA.payload.reference);
+  const rowB = app.db.prepare('SELECT id FROM requests WHERE reference = ?').get(requestB.payload.reference);
+  app.db.prepare('UPDATE requests SET branch_id = ?, department_id = ? WHERE id = ?').run(branchId, deptA.payload.id, rowA.id);
+  app.db.prepare('UPDATE requests SET branch_id = ?, department_id = ? WHERE id = ?').run(branchId, deptB.payload.id, rowB.id);
+
+  const loginA = await login('crmtesta', 'ScopedUserPass123');
+  const loginB = await login('crmtestb', 'ScopedUserPass123');
+  assert.equal(loginA.res.status, 200);
+  assert.equal(loginB.res.status, 200);
+  const scopedList = await call('/api/admin/requests', { cookie: loginA.cookie });
+  assert.deepEqual(scopedList.payload.requests.map((request) => request.reference), [requestA.payload.reference]);
+  const hiddenRequest = await call('/api/admin/requests/' + rowB.id, { cookie: loginA.cookie });
+  assert.equal(hiddenRequest.res.status, 404);
+  assert.equal((await call('/api/admin/organization', { cookie: loginA.cookie })).res.status, 403);
+
+  const transfer = await call('/api/admin/requests/' + rowA.id + '/transfers', {
+    method: 'POST', cookie: adminCookie,
+    body: { departmentId: deptB.payload.id, userId: Number(app.db.prepare("SELECT id FROM users WHERE username = 'crmtestb'").get().id), note: 'تحويل للتنفيذ' },
+  });
+  assert.equal(transfer.res.status, 201);
+  let owned = app.db.prepare('SELECT department_id, assigned_to FROM requests WHERE id = ?').get(rowA.id);
+  assert.equal(owned.department_id, deptA.payload.id);
+  assert.equal(owned.assigned_to, null);
+
+  const incoming = await call('/api/admin/transfers', { cookie: loginB.cookie });
+  assert.equal(incoming.res.status, 200);
+  assert.ok(incoming.payload.transfers.some((item) => item.id === transfer.payload.transferId));
+  const denied = await call('/api/admin/transfers/' + transfer.payload.transferId + '/respond', {
+    method: 'POST', cookie: loginA.cookie, body: { decision: 'accept' },
+  });
+  assert.equal(denied.res.status, 403);
+  const accepted = await call('/api/admin/transfers/' + transfer.payload.transferId + '/respond', {
+    method: 'POST', cookie: loginB.cookie, body: { decision: 'accept' },
+  });
+  assert.equal(accepted.res.status, 200);
+  owned = app.db.prepare('SELECT department_id, assigned_to, service_owner_id FROM requests WHERE id = ?').get(rowA.id);
+  assert.equal(owned.department_id, deptB.payload.id);
+  assert.equal(owned.assigned_to, Number(app.db.prepare("SELECT id FROM users WHERE username = 'crmtestb'").get().id));
+  assert.equal(owned.service_owner_id, owned.assigned_to);
+  assert.equal(app.db.prepare('SELECT status FROM request_transfers WHERE id = ?').get(transfer.payload.transferId).status, 'accepted');
+});
 test('قائمة الحالات تشمل الحالات المطلوبة وتحترم الإلغاء كحالة نهائية', async () => {
   if (!adminCookie) adminCookie = (await login(adminUser, adminPass)).cookie;
   assert.equal(STATUSES.quoted.label, 'تم إرسال العرض');

@@ -67,14 +67,14 @@ test('استوديو القسيمة اليدوية مستقل ومتاح في ل
 test('بيانات التتبع تكفي لبناء قسيمة مع آخر 4 أرقام للتحقق', async () => {
   const create = await fetch(`${base}/api/requests`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
     body: JSON.stringify({ type: 'umrah', name: 'عميل اختبار', phone: '0791234567', programSlug: 'umrah-p1', adults: 2, children: 1, consent: true }),
   });
   const made = await create.json();
   assert.equal(create.status, 201);
   const track = await fetch(`${base}/api/track`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'fetch', origin: base },
     body: JSON.stringify({ reference: made.reference, phone: '0791234567' }),
   });
   const data = await track.json();

@@ -437,11 +437,16 @@ export function createApp(options = {}) {
     }
 
     if (pathname.startsWith('/api/')) {
-      if (!['GET', 'HEAD'].includes(req.method)) {
-        const requestedWith = req.headers['x-requested-with'];
+      if (!['GET', 'HEAD'].includes(req.method) && pathname !== '/api/whatsapp/webhook') {
         const origin = req.headers.origin;
-        const sameOrigin = !origin || origin === baseUrl || (origin && req.headers.host && origin.endsWith(req.headers.host));
-        if (requestedWith !== 'fetch' && !sameOrigin) {
+        // A fetch header must never bypass origin validation.
+        let sameOrigin = false;
+        try {
+          const supplied = new URL(origin);
+          const requestOrigin = new URL(`${secure ? 'https' : 'http'}://${req.headers.host}`).origin;
+          sameOrigin = supplied.origin === origin && (origin === new URL(baseUrl).origin || origin === requestOrigin);
+        } catch { /* Reject missing, null and malformed origins. */ }
+        if (!sameOrigin) {
           return json(res, 403, { ok: false, message: 'طلب غير مسموح' });
         }
       }
