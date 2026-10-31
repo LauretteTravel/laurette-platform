@@ -1,0 +1,33 @@
+name: Phase 2 real ClamAV acceptance
+on:
+  pull_request:
+    branches: ["main", "codex/employee-operations-phase-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: real-clamav-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  real_clamav:
+    name: Real ClamAV — synthetic data only
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 3310:3310
+        options: --memory=4g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+      - name: Record official scanner image digest
+        run: docker image inspect clamav/clamav:stable --format '{{index .RepoDigests 0}}'
+      - name: Real engine, signatures, clean/infected, private upload and fail closed
+        run: node tools/real-clamav-acceptance.mjs
+        env:
+          ATTACHMENT_CLAMD_PORT: "3310"
+          WHATSAPP_NOTIFICATIONS_ENABLED: "0"

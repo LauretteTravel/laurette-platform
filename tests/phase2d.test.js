@@ -491,3 +491,12 @@ test('2D bounded batches advance through old duplicate alerts without starving l
  for(let i=0;i<4;i++){const result=runDeadlineJob(db,{now:tick});assert.ok(result.examined<=500);assert.ok(result.created<=1000);}
  assert.equal(db.prepare('SELECT COUNT(*) n FROM operations_alerts WHERE user_id=?').get(owner.id).n,501);
 });
+
+
+test('phase2 review: request-only roles do not receive alerts they cannot open in the deadline inbox', async()=>{
+ const owner=actor();const f=follow(owner,-1001);
+ db.prepare('UPDATE role_definitions SET permissions=? WHERE role_key=?').run('["requests:read"]',owner.key);
+ runDeadlineJob(db,{now:tick});
+ assert.equal(alerts('follow',f.id).length,0);
+ assert.equal((await api('/api/admin/deadline-alerts',{user:owner})).status,403);
+});
