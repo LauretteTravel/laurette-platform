@@ -454,7 +454,7 @@
     try {
       const data = await api(`/api/admin/notifications?page=${page}`);
       openDrawer(
-        `<div class="drawer-head"><h2>الإشعارات</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · صفحة ${data.page}/${data.pages}</p><ul class="timeline">${data.notifications.map((n) => `<li><button class="btn btn-ghost" data-task-notification="${n.id}" data-task-id="${n.task_id}">${n.read_at ? "" : "● "}${esc(n.title)}</button><span>${esc({ created: "مهمة جديدة", updated: "تحديث المهمة", comment: "تعليق جديد", checklist: "تحديث قائمة التحقق" }[n.kind] || "تحديث مهمة")} · ${followDate(n.created_at)}</span></li>`).join("") || "<li>لا توجد إشعارات متاحة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-notification-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-notification-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
+        `<div class="drawer-head"><h2>الإشعارات</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · صفحة ${data.page}/${data.pages}</p><ul class="timeline">${data.notifications.map((n) => `<li><button class="btn btn-ghost" data-task-notification="${n.id}" data-task-id="${n.task_id}">${n.read_at ? "" : "● "}${esc(n.title)}</button><span>${esc({ attachment: "مرفق جديد", created: "مهمة جديدة", updated: "تحديث المهمة", comment: "تعليق جديد", checklist: "تحديث قائمة التحقق" }[n.kind] || "تحديث مهمة")} · ${followDate(n.created_at)}</span></li>`).join("") || "<li>لا توجد إشعارات متاحة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-notification-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-notification-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
       );
       $("[data-notification-prev]").onclick=()=>openNotifications(page-1);
       $("[data-notification-next]").onclick=()=>openNotifications(page+1);
@@ -671,9 +671,10 @@
               }<label>سبب التعديل أو نتيجة الإتمام<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ التغيير</button></form></details>`
             : ""
         }
-        <hr><h3>قائمة التحقق</h3>${data.checklist.map((item) => `<label style="display:block;margin-block:10px"><input type="checkbox" data-task-check="${item.id}" ${item.done ? "checked" : ""} ${!write || ["done", "cancelled"].includes(t.status) ? "disabled" : ""}> ${esc(item.title)}</label>`).join("") || '<p class="muted">لا توجد بنود.</p>'}${write && !["done", "cancelled"].includes(t.status) ? '<form id="taskCheckAdd" class="stack"><label>بند جديد<input name="title" required maxlength="200"></label><p class="form-status is-error" role="status"></p><button class="btn btn-ghost">إضافة بند</button></form>' : ""}
+        <hr><section id="taskAttachments" aria-label="مرفقات المهمة" aria-live="polite"></section><hr><h3>قائمة التحقق</h3>${data.checklist.map((item) => `<label style="display:block;margin-block:10px"><input type="checkbox" data-task-check="${item.id}" ${item.done ? "checked" : ""} ${!write || ["done", "cancelled"].includes(t.status) ? "disabled" : ""}> ${esc(item.title)}</label>`).join("") || '<p class="muted">لا توجد بنود.</p>'}${write && !["done", "cancelled"].includes(t.status) ? '<form id="taskCheckAdd" class="stack"><label>بند جديد<input name="title" required maxlength="200"></label><p class="form-status is-error" role="status"></p><button class="btn btn-ghost">إضافة بند</button></form>' : ""}
         <hr><h3>التعليقات</h3>${write ? '<form id="taskComment" class="stack"><label>تعليق داخلي<textarea name="body" required maxlength="2000"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">إضافة تعليق</button></form>' : ""}<ul class="timeline">${data.comments.map((c) => `<li><p style="white-space:pre-wrap">${esc(c.body)}</p><span>${esc(c.user_name)} · ${followDate(c.created_at)}</span></li>`).join("") || "<li>لا تعليقات بعد.</li>"}</ul>
         <h3>سجل المهمة (آخر 100 حدث)</h3><ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.reason)}</b><span>${esc(e.actor_name || "النظام")} · ${followDate(e.created_at)}</span>${e.before_json ? `<small>${taskEventChange(e)}</small>` : ""}</li>`).join("")}</ul>`);
+      loadTaskAttachments(id,!['done','cancelled'].includes(t.status));
       $("[data-open-linked-request]")?.addEventListener("click", () =>
         openRequest(t.request_id),
       );
@@ -743,6 +744,22 @@
       toast(error.message, "bad");
     }
   }
+
+  async function loadTaskAttachments(id,allowUpload=true){
+    const slot=$('#taskAttachments');if(!slot)return;slot.innerHTML='<p>جارٍ تحميل المرفقات…</p>';
+    try{
+      const data=await api('/api/admin/tasks/'+id+'/attachments');if(!slot.isConnected)return;
+      slot.innerHTML=`<h3>الملفات والصوت</h3><p class="muted">PDF وصور PNG/JPEG وصوت WAV/MP3/OGG. الحد5ميغابايت للملف. يلزم نجاح فحص الأمان.</p><ul class="timeline">${data.attachments.map(f=>`<li><b>${esc(f.filename)}</b><span>${num(Math.ceil(f.bytes/1024))} كيلوبايت · ${followDate(f.created_at)}</span><a class="btn btn-ghost btn-sm" href="/api/admin/task-attachments/${f.id}" download>تنزيل</a>${f.mime.startsWith('audio/')?`<audio controls preload="none" src="/api/admin/task-attachments/${f.id}?preview=1" aria-label="${esc(f.filename)}"></audio>`:f.mime.startsWith('image/')?`<details><summary>معاينة الصورة</summary><img loading="lazy" src="/api/admin/task-attachments/${f.id}?preview=1" alt="${esc(f.filename)}" style="max-width:100%;max-height:200px"></details>`:''}</li>`).join('')||'<li>لا توجد مرفقات.</li>'}</ul>${allowUpload&&hasPermission('tasks:write')?'<form id="taskAttachmentForm" class="stack"><label>ملف أو رسالة صوتية<input name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.wav,.mp3,.ogg,.opus" required></label><p class="form-status" role="status"></p><button class="btn btn-primary">رفع وفحص</button></form>':''}`;
+      $('#taskAttachmentForm')?.addEventListener('submit',async event=>{
+        event.preventDefault();const form=event.target,button=form.querySelector('button'),status=form.querySelector('[role="status"]'),file=form.elements.file.files[0];
+        if(!file||file.size>data.maxBytes){status.textContent='اختر ملفًا حتى5ميغابايت';return;}
+        button.disabled=true;status.textContent='جارٍ الرفع وفحص الأمان…';
+        try{const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('تعذرت قراءة الملف'));reader.readAsDataURL(file);});await api('/api/admin/tasks/'+id+'/attachments',{method:'POST',body:JSON.stringify({filename:file.name,base64})});toast('حُفظ الملف بعد الفحص');loadTaskAttachments(id,allowUpload);}
+        catch(error){status.textContent=error.message;status.classList.add('is-error');}finally{button.disabled=false;}
+      });
+    }catch(error){if(slot.isConnected){slot.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-retry-attachment>إعادة المحاولة</button>`;$('[data-retry-attachment]',slot).onclick=()=>loadTaskAttachments(id,allowUpload);}}
+  }
+
   function taskEventChange(event) {
     try {
       const old = JSON.parse(event.before_json),

@@ -1,3 +1,4 @@
+import * as ATTACHMENTS from './lib/task-attachments.js';
 import * as TASKS from './lib/tasks-api.js';
 import * as FOLLOW_UPS from './lib/follow-ups.js';
 import http from "node:http";
@@ -253,6 +254,9 @@ export function createApp(options = {}) {
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
 
+  router.get('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.listAttachments,{action:'tasks:read'}));
+  router.post('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.uploadAttachment,{action:'tasks:write'}));
+  router.get('/api/admin/task-attachments/:id',api(ATTACHMENTS.downloadAttachment,{action:'tasks:read'}));
   router.get('/api/admin/tasks/options', api(TASKS.taskOptions,{action:'tasks:read'}));
   router.get('/api/admin/tasks', api(TASKS.listTasks,{action:'tasks:read'}));
   router.get('/api/admin/tasks/:id', api(TASKS.getTask,{action:'tasks:read'}));
