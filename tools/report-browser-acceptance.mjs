@@ -306,6 +306,18 @@ try {
   assert.equal(dims.width, 390);
   assert.ok(dims.scroll <= 390, JSON.stringify(dims));
   assert.equal(dims.columns, 1);
+  const employeeCell = await phone
+    .locator('[data-group-key="employee"]')
+    .first()
+    .evaluate((el) => ({
+      width: el.getBoundingClientRect().width,
+      height: el.closest("td").getBoundingClientRect().height,
+    }));
+  assert.ok(
+    employeeCell.width >= 100 && employeeCell.height < 110,
+    JSON.stringify(employeeCell),
+  );
+  metrics.mobileEmployeeCell = employeeCell;
   await phone.screenshot({
     path: join(out, "dashboard-mobile.png"),
     fullPage: true,

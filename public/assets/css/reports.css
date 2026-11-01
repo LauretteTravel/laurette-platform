@@ -111,6 +111,21 @@
 .rp th {
   background: #f6f8fa;
 }
+.rp table.rp-wide {
+  min-width: 700px;
+}
+.rp .rp-wide th:first-child,
+.rp .rp-wide td:first-child {
+  min-width: 140px;
+}
+.rp .rp-wide td:first-child .btn {
+  min-width: 120px;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.rp [data-detail-view] table {
+  min-width: 1400px;
+}
 .rp-notice {
   padding: 12px;
   border-inline-start: 4px solid var(--rp-gold);

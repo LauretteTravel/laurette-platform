@@ -57,6 +57,7 @@
           pxPerMm = canvas.width / 190,
           scale = canvas.height / Math.max(1, block.offsetHeight);
         const points = [...block.querySelectorAll("tr,p,.rd-line")]
+          .filter((el) => !el.closest("thead"))
           .map((el) => (el.getBoundingClientRect().bottom - box.top) * scale)
           .filter((v) => v > 0 && v <= canvas.height)
           .sort((a, b) => a - b);
@@ -78,7 +79,7 @@
             capacity = Math.floor(270 * pxPerMm);
           }
           const pageWasEmpty = y === 10;
-          if (y === 10 && offset > headEnd && offset < tableEnd && head) {
+          if (y === 10 && offset >= headEnd && offset < tableEnd && head) {
             headCanvas ??= await capture(head);
             const h = (headCanvas.height / headCanvas.width) * 190;
             pdf.addImage(
