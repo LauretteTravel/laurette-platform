@@ -2020,11 +2020,25 @@
       if (e.target === wrap || e.target.closest('[data-close-drawer]')) closeDrawer();
     });
     wrap.addEventListener('cancel',e=>{e.preventDefault();closeDrawer();});
+    document.addEventListener('keydown',trapDrawerTab,true);
+  }
+
+  function trapDrawerTab(event) {
+    const wrap=state.overlay;
+    if(!wrap?.open||event.key!=='Tab'||event.altKey||event.ctrlKey||event.metaKey)return;
+    const items=$$('button,input,select,textarea,a[href],summary,audio[controls],video[controls],[tabindex]',wrap)
+      .filter(el=>el.tabIndex>=0&&!el.matches(':disabled')&&el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden');
+    event.preventDefault();
+    if(!items.length){wrap.focus();return;}
+    const index=items.indexOf(document.activeElement);
+    const next=index<0?(event.shiftKey?items.length-1:0):(index+(event.shiftKey?-1:1)+items.length)%items.length;
+    items[next].focus();
   }
 
   function closeDrawer() {
     if (state.overlay) {
       const wrap=state.overlay;
+      document.removeEventListener('keydown',trapDrawerTab,true);
       wrap.close();
       wrap.remove();
       document.body.style.overflow=wrap.previousOverflow;

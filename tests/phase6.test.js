@@ -54,6 +54,10 @@ test('phase6 health returns bounded operational facts without private paths, end
 test('phase6 cached health never bypasses live permission, membership or session revocation',async()=>{
   const u=actor();assert.equal((await call(u)).status,200);
   db.prepare('UPDATE role_definitions SET permissions=? WHERE role_key=?').run('[]',u.key);assert.equal((await call(u)).status,403);
+  db.prepare('UPDATE role_definitions SET permissions=? WHERE role_key=?').run('["system:health"]',u.key);
+  const member=Number(db.prepare('INSERT INTO staff_memberships(user_id,role_key,branch_id,active,is_primary,created_at,updated_at) VALUES(?,?,?,1,0,?,?)').run(u.id,u.key,branch,stamp,stamp).lastInsertRowid);
+  const delegated={...u,cookie:'lt_session='+createSession(db,u.id,'127.0.0.1','synthetic',{mfaVerified:true,membershipId:member}).token};
+  assert.equal((await call(delegated)).status,200);db.prepare('UPDATE staff_memberships SET active=0 WHERE id=?').run(member);assert.equal((await call(delegated)).status,401);
   db.prepare('DELETE FROM sessions WHERE user_id=?').run(u.id);assert.equal((await call(u)).status,401);
 });
 test('phase6 revocation during asynchronous inventory prevents the response',async()=>{
@@ -90,4 +94,11 @@ test('phase6 malformed scheduler metadata fails visibly without echoing private 
   db.prepare("INSERT OR REPLACE INTO meta(key,value) VALUES('operations.deadline-health.v1',?)").run(JSON.stringify({at:secret,examined:secret,unroutable:-2,error:secret}));
   let payload;const c=ctx(owner);c.res.end=s=>payload=JSON.parse(s);await monitor()(c);
   assert.equal(payload.deadlines.policy.valid,false);assert.equal(payload.deadlines.lastRecordedCycle.at,null);assert.equal(payload.deadlines.lastRecordedCycle.examined,null);assert.equal(payload.deadlines.lastRecordedCycle.unroutable,null);assert.ok(!JSON.stringify(payload).includes(secret));
+});
+test('phase6 queue health bounds large histories and never exposes arbitrary stored state text',async()=>{
+  db.exec('BEGIN');
+  for(let i=0;i<1005;i++)db.prepare('INSERT INTO webhook_deliveries(event,status,created_at) VALUES(?,?,?)').run(secret,i===1004?secret:'failed',stamp);
+  db.exec('COMMIT');
+  let payload;const c=ctx(owner);c.res.end=s=>payload=JSON.parse(s);await monitor()(c);
+  assert.equal(payload.n8n.queue.sampled,1000);assert.equal(payload.n8n.queue.truncated,true);assert.equal(payload.n8n.queue.states.failed,999);assert.equal(payload.n8n.queue.states.other,1);assert.ok(!JSON.stringify(payload).includes(secret));
 });
