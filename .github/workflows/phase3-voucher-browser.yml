@@ -35,3 +35,14 @@ jobs:
           name: synthetic-voucher-evidence
           path: ${{ runner.temp }}/voucher-evidence
           retention-days: 7
+      - name: Program editor, human review, explicit publication and 390px mobile
+        run: node tools/program-browser-acceptance.mjs
+        env:
+          VOUCHER_TEST_DEPS: ${{ runner.temp }}/voucher-browser
+          VOUCHER_EVIDENCE: ${{ runner.temp }}/voucher-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-program-evidence
+          path: ${{ runner.temp }}/voucher-evidence/phase4
+          retention-days: 7

@@ -1,3 +1,4 @@
+import * as PROGRAMS from './lib/programs.js';
 import * as VOUCHERS from './lib/vouchers.js';
 import * as DEADLINES from './lib/deadlines.js';
 import * as ATTACHMENTS from './lib/task-attachments.js';
@@ -114,6 +115,7 @@ export function createApp(options = {}) {
   const seed = options.seed || loadSeed(options.seedFile || join(HERE, 'data', 'seed.json'));
   const adminPassword = options.adminPassword || process.env.ADMIN_PASSWORD || localAdminPassword() || ensureAdminPassword();
   const seedResult = seedDatabase(db, seed, hashPassword, adminPassword);
+  PROGRAMS.adoptProgramCatalog(db);
   // Recovery only runs for real server boots (server.js CLI). Programmatic boots that pass
   // their own seed/adminPassword (tests, tools) are skipped so fixtures stay untouched.
   if (!options.seed && !options.adminPassword) applyAdminPasswordRecovery(db);
@@ -304,7 +306,24 @@ export function createApp(options = {}) {
   router.get('/api/admin/customers/:id', api(API.getCustomer, { action: 'customers:read' }));
   router.patch('/api/admin/customers/:id', api(API.updateCustomer, { action: 'customers:write' }));
 
-  for (const resource of ['programs', 'offers', 'news', 'articles', 'faq', 'visa', 'kb', 'destinations', 'reviews']) {
+  router.get('/api/admin/program-workspace',api(PROGRAMS.listPrograms,{action:'programs:read'}));
+  router.get('/api/admin/program-workspace/meta',api(PROGRAMS.metadata,{action:'programs:read'}));
+  router.post('/api/admin/program-workspace/categories',api(PROGRAMS.saveCategory,{action:'programs:categories'}));
+  router.post('/api/admin/program-workspace',api(PROGRAMS.createProgram,{action:'programs:write'}));
+  router.get('/api/admin/program-workspace/:id',api(PROGRAMS.getProgram,{action:'programs:read'}));
+  router.patch('/api/admin/program-workspace/:id',api(PROGRAMS.saveProgram,{action:'programs:write'}));
+  router.post('/api/admin/program-workspace/:id/submit',api(PROGRAMS.submitProgram,{action:'programs:write'}));
+  router.post('/api/admin/program-workspace/:id/approve',api(PROGRAMS.approveProgram,{action:'programs:approve'}));
+  router.post('/api/admin/program-workspace/:id/publish',api(PROGRAMS.publishProgram,{action:'programs:publish'}));
+  router.post('/api/admin/program-workspace/:id/archive',api(PROGRAMS.archiveProgram,{action:'programs:publish'}));
+  router.get('/api/admin/program-workspace/:id/versions/:version',api(PROGRAMS.getVersion,{action:'programs:read'}));
+  router.post('/api/admin/program-workspace/:id/sources',api(PROGRAMS.addSource,{action:'programs:sources'}));
+  router.get('/api/admin/program-workspace/:id/sources/:sourceId',api(PROGRAMS.downloadSource,{action:'programs:sources'}));
+  router.get('/api/admin/programs',api(ctx=>API.listResource(ctx,'programs'),{action:'programs:read'}));
+  router.post('/api/admin/programs',api(PROGRAMS.legacyWriteBlocked,{action:'programs:write'}));
+  router.patch('/api/admin/programs/:id',api(PROGRAMS.legacyWriteBlocked,{action:'programs:write'}));
+  router.delete('/api/admin/programs/:id',api(PROGRAMS.legacyWriteBlocked,{action:'programs:delete'}));
+  for (const resource of ['offers', 'news', 'articles', 'faq', 'visa', 'kb', 'destinations', 'reviews']) {
     const access = API.resourceAccess(resource);
     router.get(`/api/admin/${resource}`, api((ctx) => API.listResource(ctx, resource), { action: access.read }));
     router.post(`/api/admin/${resource}`, api((ctx) => API.createResource(ctx, resource), { action: access.write }));
@@ -657,6 +676,7 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/voucher.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/voucher-studio.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/voucher-ledger.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/program-workspace.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -668,6 +688,7 @@ function adminShell(ctx) {
 <script src="/assets/js/voucher-generator.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-studio.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-ledger.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/program-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }
