@@ -134,6 +134,10 @@ async function api(
   const res = await fetch(base + path, {
     method,
     headers: {
+      // These authorization tests do not exercise connection pooling. The preceding
+      // synchronous batch can outlive an idle socket on slower Windows runners;
+      // give each request its own connection instead of retrying a lost request.
+      connection: "close",
       origin: origin || base,
       "content-type": "application/json",
       cookie: user.cookie,
