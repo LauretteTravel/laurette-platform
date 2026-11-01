@@ -1,0 +1,32 @@
+name: Phase 2 encrypted scanner tunnel
+on:
+  pull_request:
+    branches: ["main", "codex/employee-operations-phase-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: scanner-tunnel-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  encrypted_scanner:
+    name: SSH and real ClamAV — synthetic data only
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      clamav:
+        image: clamav/clamav:stable
+        ports:
+          - 127.0.0.1:3310:3310
+        options: --memory=4g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+      - name: Install disposable test SSH server
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq openssh-server
+      - name: Verify encrypted scanner connection and identity rejection
+        run: node tools/tunnel-acceptance.mjs
+        env:
+          CLAMAV_CONTAINER_ID: ${{ job.services.clamav.id }}

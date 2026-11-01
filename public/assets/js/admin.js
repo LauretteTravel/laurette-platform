@@ -18,6 +18,9 @@
       manager: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'programs:write', 'content:write', 'visa:write', 'kb:write', 'audit:read', 'overview:read', 'reports:read'],
       agent: ['requests:read', 'requests:write', 'customers:read', 'customers:write', 'programs:read', 'overview:read', 'kb:write'],
     };
+    const taskLegacy={'tasks:read':'requests:read','tasks:write':'requests:write','tasks:assign':'requests:write'};
+    if(taskLegacy[permission])permission=taskLegacy[permission];
+    if (permission === 'requests:assign') permission = 'requests:write';
     return (legacy[state.user?.role] || []).includes(permission);
   }
 
@@ -59,6 +62,8 @@
 
   /* ---------------- login ---------------- */
   function renderLogin(message = "") {
+    closeDrawer();
+    clearInterval(notificationTimer);notificationTimer=null;
     root.innerHTML = `<div class="login-wrap">
       <form class="login-card" id="loginForm" autocomplete="on">
         <div class="brand" style="margin-bottom:16px">
@@ -163,7 +168,10 @@
   /* ---------------- shell ---------------- */
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
-    { id: 'requests', label: 'الطلبات', icon: '✉', permission: 'requests:read' },
+    {id:'deadlines',label:'المواعيد وعبء العمل',icon:'◴',permission:'tasks:read'},
+    { id:'tasks',label:'مهامي والفريق',icon:'☑',permission:'tasks:read' },
+    { id: 'followups', label: 'متابعاتي', icon: '◷', permission: 'requests:read' },
+    { id: 'requests', label: 'صندوق الطلبات', icon: '✉', permission: 'requests:read' },
     { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
@@ -185,11 +193,12 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
   function renderShell() {
+    closeDrawer();
     if (state.user.mustChange) {
       renderRequiredPasswordChange();
       return;
@@ -217,7 +226,7 @@
         <div class="admin-top">
           <h1 id="pageTitle">${esc(sections.find((s) => s.id === state.section)?.label || '')}</h1>
           <span class="spacer"></span>
-          <label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
+          ${hasPermission('tasks:read')?'<button class="btn btn-ghost btn-sm" id="staffNotifications" aria-label="فتح الإشعارات">الإشعارات</button>':''}<label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
           <a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">عرض الموقع</a>
         </div>
         <div id="view"></div>
@@ -232,6 +241,7 @@
       renderLogin();
     });
     loadSection();
+    startNotifications();
     api("/api/auth/memberships")
       .then((data) => {
         if (data.memberships.length < 2) return;
@@ -323,7 +333,7 @@
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
     const map = {
-      overview: renderOverview, requests: renderRequests, customers: renderCustomers, programs: renderPrograms,
+      overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
@@ -393,6 +403,578 @@
     });
   }
 
+
+  /* ---------------- deadlines and workload ---------------- */
+  const DEADLINE_KIND = {
+    soon: "قرب الموعد",
+    overdue: "متأخر",
+    escalated: "تصعيد إلى المشرف",
+  };
+  async function renderDeadlines(owner = "", page = 1) {
+    const view = $("#view");
+    try {
+      const data = await api(
+        "/api/admin/deadlines?" +
+          new URLSearchParams({
+            ...(owner ? { owner } : {}),
+            page: String(page),
+          }),
+      );
+      if (state.section !== "deadlines") return;
+      const alerts = await api("/api/admin/deadline-alerts");
+      if (state.section !== "deadlines") return;
+      view.innerHTML = `<div class="toolbar"><button class="btn btn-primary" data-deadline-alerts>تنبيهاتي (${num(alerts.unread)})</button><button class="btn btn-ghost" data-deadline-refresh>تحديث / كل المسؤولين</button>${hasPermission("organization:write") ? '<button class="btn btn-ghost" data-deadline-policy>سياسة التنبيهات</button>' : ""}</div><p class="muted">التنبيهات التلقائية ${data.policy.enabled ? "مفعلة" : "متوقفة"} · قرب الموعد ${num(data.policy.soonMinutes)} دقيقة · التصعيد بعد ${num(data.policy.escalateMinutes)} دقيقة تأخير. المواعيد بتوقيت عمّان.</p><h2>عبء العمل ضمن نطاقي</h2><p class="muted">أعداد المهام والمتابعات المفتوحة المسندة، وليست تقدير ساعات أو أداء الموظف. اضغط اسم المسؤول لعرض مواعيده.</p><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>المسؤول</th><th>مفتوحة</th><th>متأخرة</th><th>قريبة</th></tr></thead><tbody>${data.rows.map((r) => `<tr><td><button class="btn btn-ghost" data-workload-owner="${r.owner_id ?? "unassigned"}">${esc(r.owner_name || "غير مسند")}${r.active === 0 ? " (حساب معطل)" : ""}</button></td><td>${num(r.open)}</td><td>${num(r.overdue)}</td><td>${num(r.soon)}</td></tr>`).join("") || '<tr><td colspan="4">لا توجد عناصر مفتوحة ضمن نطاقك.</td></tr>'}</tbody></table></div></div><h2>المتأخر والقريب من الموعد</h2><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>العنصر</th><th>النوع</th><th>المسؤول</th><th>الموعد</th></tr></thead><tbody>${data.due.map((r) => `<tr><td><button class="btn btn-ghost" data-deadline-open="${r.entity}:${r.id}:${r.request_id || ""}">${esc(r.title)}</button></td><td>${r.entity === "task" ? "مهمة" : "متابعة طلب"}</td><td>${esc(r.owner_name || "غير مسند")}</td><td>${followDate(r.due_at)}</td></tr>`).join("") || '<tr><td colspan="4">لا توجد مواعيد قريبة أو متأخرة.</td></tr>'}</tbody></table></div></div><div class="btn-row mt-3"><button class="btn btn-ghost" data-deadline-prev ${page <= 1 ? "disabled" : ""}>السابق</button><span>${page}/${data.pages} · ${num(data.total)} عنصر</span><button class="btn btn-ghost" data-deadline-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`;
+      $("[data-deadline-alerts]", view).onclick = () => openDeadlineAlerts();
+      $("[data-deadline-refresh]", view).onclick = () => renderDeadlines();
+      $("[data-deadline-policy]", view)?.addEventListener(
+        "click",
+        openDeadlinePolicy,
+      );
+      $$("[data-workload-owner]", view).forEach(
+        (b) => (b.onclick = () => renderDeadlines(b.dataset.workloadOwner)),
+      );
+      $$("[data-deadline-open]", view).forEach(
+        (b) =>
+          (b.onclick = () => {
+            const [kind, id, requestId] = b.dataset.deadlineOpen.split(":");
+            kind === "task"
+              ? openTask(Number(id))
+              : openRequest(Number(requestId));
+          }),
+      );
+      $("[data-deadline-prev]", view).onclick = () =>
+        renderDeadlines(owner, page - 1);
+      $("[data-deadline-next]", view).onclick = () =>
+        renderDeadlines(owner, page + 1);
+    } catch (error) {
+      if (state.section === "deadlines") {
+        view.innerHTML = `<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-deadline-retry>إعادة المحاولة</button>`;
+        $("[data-deadline-retry]", view).onclick = () =>
+          renderDeadlines(owner, page);
+      }
+    }
+  }
+  async function openDeadlineAlerts(page = 1) {
+    try {
+      const data = await api("/api/admin/deadline-alerts?page=" + page);
+      openDrawer(
+        `<div class="drawer-head"><h2>تنبيهات المواعيد</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · ${page}/${data.pages}</p><ul class="timeline">${data.alerts.map((a) => `<li><b>${esc(DEADLINE_KIND[a.kind])}</b><button class="btn btn-ghost" data-operation-alert="${a.id}" data-entity="${a.entity}" data-id="${a.entity_id}" data-request="${a.request_id || ""}">${a.read_at ? "" : "● "}${esc(a.title)}</button><span>الموعد: ${followDate(a.due_at)}</span></li>`).join("") || "<li>لا توجد تنبيهات نشطة مخولة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-alert-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-alert-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
+      );
+      $$("[data-operation-alert]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            try {
+              await api(
+                "/api/admin/deadline-alerts/" +
+                  b.dataset.operationAlert +
+                  "/read",
+                { method: "POST" },
+              );
+              b.dataset.entity === "task"
+                ? openTask(Number(b.dataset.id))
+                : openRequest(Number(b.dataset.request));
+            } catch (e) {
+              toast(e.message, "bad");
+            }
+          }),
+      );
+      $("[data-alert-prev]").onclick = () => openDeadlineAlerts(page - 1);
+      $("[data-alert-next]").onclick = () => openDeadlineAlerts(page + 1);
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function openDeadlinePolicy() {
+    try {
+      const data = await api("/api/admin/deadline-policy"),
+        p = data.policy;
+      openDrawer(
+        `<div class="drawer-head"><h2>سياسة تنبيهات المواعيد</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>التفعيل ينشئ تنبيهات داخلية فقط. التصعيد للمدير المباشر النشط والمخول أصلًا في ملف الموظف؛ لن يغير حالة أو مسؤولية العنصر.</p><p class="muted">آخر تشغيل: ${data.health ? followDate(data.health.at) : "لم يعمل بعد"}${data.health ? ` · أُنشئ ${num(data.health.created)} تنبيهًا · تعذر توجيه ${num(data.health.unroutable)}` : ""}</p><form id="deadlinePolicyForm" class="stack"><label><input name="enabled" type="checkbox" ${p.enabled ? "checked" : ""}> تفعيل التشغيل التلقائي كل دقيقة</label><label>تنبيه قبل الموعد (دقائق)<input name="soonMinutes" type="number" min="15" max="1440" value="${p.soonMinutes}" required></label><label>التصعيد بعد التأخير (دقائق)<input name="escalateMinutes" type="number" min="60" max="10080" value="${p.escalateMinutes}" required></label><label>سبب التغيير<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ السياسة</button></form><button class="btn btn-ghost mt-3" data-run-deadlines>تشغيل دورة الآن وفق السياسة المحفوظة</button>`,
+      );
+      $("#deadlinePolicyForm").onsubmit = async (event) => {
+        event.preventDefault();
+        const form = event.target,
+          button = form.querySelector("button");
+        button.disabled = true;
+        try {
+          await api("/api/admin/deadline-policy", {
+            method: "POST",
+            body: JSON.stringify({
+              enabled: form.elements.enabled.checked,
+              soonMinutes: Number(form.elements.soonMinutes.value),
+              escalateMinutes: Number(form.elements.escalateMinutes.value),
+              reason: form.elements.reason.value,
+              revision: p.revision,
+            }),
+          });
+          toast("حُفظت السياسة");
+          openDeadlinePolicy();
+          renderDeadlines();
+        } catch (e) {
+          form.querySelector('[role="status"]').textContent = e.message;
+        } finally {
+          button.disabled = false;
+        }
+      };
+      $("[data-run-deadlines]").onclick = async (event) => {
+        event.target.disabled = true;
+        try {
+          const result = await api("/api/admin/deadlines/run", {
+            method: "POST",
+          });
+          toast(
+            result.result.enabled
+              ? `أُنشئ ${num(result.result.created)} تنبيهًا`
+              : "المجدول متوقف وفق السياسة",
+          );
+          openDeadlinePolicy();
+          renderDeadlines();
+        } catch (e) {
+          toast(e.message, "bad");
+        } finally {
+          event.target.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+
+  /* ---------------- tasks and internal notifications ---------------- */
+  const TASK_STATUS = {
+    new: "جديدة",
+    in_progress: "قيد العمل",
+    waiting: "تنتظر طرفًا آخر",
+    review: "بحاجة مراجعة",
+    done: "مكتملة",
+    cancelled: "ملغاة",
+  };
+  const TASK_PRIORITY = {
+    low: "منخفضة",
+    normal: "عادية",
+    high: "مرتفعة",
+    urgent: "عاجلة",
+  };
+  let notificationTimer = null,
+    notificationBusy = false;
+  function localInput(iso) {
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  }
+  async function updateNotificationCount() {
+    const button = $("#staffNotifications");
+    if (!button || notificationBusy || document.hidden) return;
+    notificationBusy = true;
+    try {
+      const data = await api("/api/admin/notifications");
+      if (button.isConnected) {
+        button.textContent = `الإشعارات (${num(data.unread)})`;
+        button.title = "الإشعارات ضمن نطاق الوصول الحالي";
+      }
+    } catch (error) {
+      if (button.isConnected) button.title = error.message;
+    } finally {
+      notificationBusy = false;
+    }
+  }
+  function startNotifications() {
+    clearInterval(notificationTimer);
+    notificationTimer = null;
+    if (!hasPermission("tasks:read")) return;
+    $("#staffNotifications")?.addEventListener("click", () => openNotifications());
+    updateNotificationCount();
+    notificationTimer = setInterval(updateNotificationCount, 60000);
+  }
+  async function openNotifications(page = 1) {
+    try {
+      const data = await api(`/api/admin/notifications?page=${page}`);
+      openDrawer(
+        `<div class="drawer-head"><h2>الإشعارات</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${num(data.unread)} غير مقروء · صفحة ${data.page}/${data.pages}</p><ul class="timeline">${data.notifications.map((n) => `<li><button class="btn btn-ghost" data-task-notification="${n.id}" data-task-id="${n.task_id}">${n.read_at ? "" : "● "}${esc(n.title)}</button><span>${esc({ attachment: "مرفق جديد", created: "مهمة جديدة", updated: "تحديث المهمة", comment: "تعليق جديد", checklist: "تحديث قائمة التحقق" }[n.kind] || "تحديث مهمة")} · ${followDate(n.created_at)}</span></li>`).join("") || "<li>لا توجد إشعارات متاحة.</li>"}</ul><div class="btn-row"><button class="btn btn-ghost" data-notification-prev ${page <= 1 ? "disabled" : ""}>السابق</button><button class="btn btn-ghost" data-notification-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`,
+      );
+      $("[data-notification-prev]").onclick=()=>openNotifications(page-1);
+      $("[data-notification-next]").onclick=()=>openNotifications(page+1);
+      $("[data-task-notification]").forEach(
+        (b) =>
+          (b.onclick = async () => {
+            try {
+              await api(
+                `/api/admin/notifications/${b.dataset.taskNotification}/read`,
+                { method: "POST" },
+              );
+              await openTask(Number(b.dataset.taskId));
+              updateNotificationCount();
+            } catch (e) {
+              toast(e.message, "bad");
+            }
+          }),
+      );
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function renderTasks(page = 1) {
+    const view = $("#view");
+    try {
+      const data = await api(
+        "/api/admin/tasks?" +
+          new URLSearchParams({ ...state.query, page: String(page) }),
+      );
+      if (state.section !== "tasks") return;
+      view.innerHTML = `<div class="toolbar">${hasPermission("tasks:write") ? '<button class="btn btn-primary" data-new-task>مهمة جديدة</button>' : ""}<label>الحالة<select data-task-filter="status"><option value="open">المفتوحة</option><option value="all" ${state.query.status === "all" ? "selected" : ""}>كل الحالات</option>${Object.entries(
+        TASK_STATUS,
+      )
+        .map(
+          ([k, v]) =>
+            `<option value="${k}" ${state.query.status === k ? "selected" : ""}>${v}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>الموعد<select data-task-filter="due"><option value="">كل المواعيد</option><option value="overdue" ${state.query.due === "overdue" ? "selected" : ""}>متأخرة</option><option value="next24h" ${state.query.due === "next24h" ? "selected" : ""}>خلال 24 ساعة</option></select></label>${hasPermission("tasks:assign") ? `<label>النطاق<select data-task-filter="view"><option value="mine">مهامي والمشارك بها</option><option value="team" ${state.query.view === "team" ? "selected" : ""}>الفريق ضمن نطاقي</option></select></label>` : ""}<label>بحث<input data-task-filter="q" value="${esc(state.query.q || "")}" maxlength="200"></label><button class="btn btn-ghost" data-task-apply>تصفية</button></div><p class="muted">${num(data.total)} مهمة · المواعيد بتوقيت عمّان</p><div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>المهمة</th><th>المسؤول</th><th>الجهة</th><th>الحالة</th><th>الأولوية</th><th>الموعد</th></tr></thead><tbody>${data.tasks.map((t) => `<tr><td><button class="btn btn-ghost" data-task-open="${t.id}">${esc(t.title)}</button></td><td>${esc(t.assignee_name)}</td><td>${esc(t.branch_name)}<br>${esc(t.department_name || "كل الأقسام")}</td><td>${TASK_STATUS[t.status]}</td><td>${TASK_PRIORITY[t.priority]}</td><td>${followDate(t.due_at)}${t.overdue ? '<br><span class="badge badge-danger">متأخرة</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="6">لا توجد مهام مطابقة.</td></tr>'}</tbody></table></div></div><div class="btn-row mt-3"><button class="btn btn-ghost" data-task-prev ${page <= 1 ? "disabled" : ""}>السابق</button><span>${page}/${data.pages}</span><button class="btn btn-ghost" data-task-next ${page >= data.pages ? "disabled" : ""}>التالي</button></div>`;
+      $("[data-new-task]")?.addEventListener("click", () => openTaskCreate());
+      $$("[data-task-open]", view).forEach(
+        (b) => (b.onclick = () => openTask(Number(b.dataset.taskOpen))),
+      );
+      $("[data-task-apply]", view).onclick = () => {
+        state.query = {};
+        $$("[data-task-filter]", view).forEach((el) => {
+          if (el.value) state.query[el.dataset.taskFilter] = el.value;
+        });
+        renderTasks();
+      };
+      $("[data-task-prev]", view).onclick = () => renderTasks(page - 1);
+      $("[data-task-next]", view).onclick = () => renderTasks(page + 1);
+    } catch (error) {
+      if (state.section === "tasks") {
+        view.innerHTML = `<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-task-retry>إعادة المحاولة</button>`;
+        $("[data-task-retry]", view).onclick = () => renderTasks(page);
+      }
+    }
+  }
+  async function openTaskCreate(request = null) {
+    try {
+      const initial = await api("/api/admin/tasks/options");
+      openDrawer(
+        `<div class="drawer-head"><h2>مهمة جديدة</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><form id="taskCreate" class="stack"><label>العنوان<input name="title" required minlength="3" maxlength="160"></label><label>الوصف<textarea name="description" maxlength="4000"></textarea></label><div class="form-grid"><label>الفرع<select name="branchId" required><option value="">اختر الفرع</option>${initial.branches.map((b) => `<option value="${b.id}" ${Number(request?.branch_id || state.user.branchId) === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</select></label><label>القسم<select name="departmentId"><option value="">دون قسم محدد</option></select></label></div><label>مرجع الطلب (اختياري)<input name="requestReference" maxlength="100" value="${esc(request?.reference || "")}" placeholder="مرجع الطلب كما يظهر في صندوق الطلبات"></label><p class="muted">ربط الطلب يتطلب تطابق الفرع والقسم والوصول المسبق إليه.</p><label>الموعد بتوقيت جهازك (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)})<input type="datetime-local" name="dueAt" required></label><label>الأولوية<select name="priority">${Object.entries(
+          TASK_PRIORITY,
+        )
+          .map(
+            ([k, v]) =>
+              `<option value="${k}" ${k === "normal" ? "selected" : ""}>${v}</option>`,
+          )
+          .join(
+            "",
+          )}</select></label><label>المسؤول<select name="assignedTo" required></select></label>${hasPermission("tasks:assign") ? '<label>المشاركون (اختياري؛ يمكن تحديد أكثر من موظف)<select name="members" multiple size="5" aria-describedby="task-members-help"></select></label><small id="task-members-help">على الكمبيوتر استخدم Ctrl أو ⌘ لتحديد عدة مشاركين.</small>' : ""}<p class="form-status is-error" role="status"></p><button class="btn btn-primary" type="submit">إنشاء المهمة</button></form>`,
+      );
+      const form = $("#taskCreate"),
+        branch = form.elements.branchId,
+        dept = form.elements.departmentId,
+        owner = form.elements.assignedTo,
+        submit = form.querySelector('[type="submit"]');
+      let loading = 0;
+      const load = async (refreshDepartments = false) => {
+        const ticket = ++loading;
+        submit.disabled = true;
+        try {
+          if (!branch.value) {
+            owner.innerHTML = "";
+            return;
+          }
+          const desired = refreshDepartments
+            ? (request?.department_id ??
+              (Number(branch.value) === state.user.branchId
+                ? state.user.departmentId
+                : null) ??
+              "")
+            : dept.value;
+          const options = await api(
+            "/api/admin/tasks/options?" +
+              new URLSearchParams({
+                branchId: branch.value,
+                departmentId: String(desired),
+                ...(form.elements.requestReference.value
+                  ? { requestReference: form.elements.requestReference.value }
+                  : {}),
+              }),
+          );
+          if (ticket !== loading || !form.isConnected) return;
+          if (refreshDepartments)
+            dept.innerHTML =
+              '<option value="">دون قسم محدد</option>' +
+              options.departments
+                .map(
+                  (d) =>
+                    `<option value="${d.id}" ${Number(desired) === d.id ? "selected" : ""}>${esc(d.name)}</option>`,
+                )
+                .join("");
+          owner.innerHTML = options.users
+            .map(
+              (u) =>
+                `<option value="${u.id}" ${u.id === state.user.id ? "selected" : ""}>${esc(u.name)}</option>`,
+            )
+            .join("");
+          if (form.elements.members)
+            form.elements.members.innerHTML = options.users
+              .map((u) => `<option value="${u.id}">${esc(u.name)}</option>`)
+              .join("");
+          form.querySelector('[role="status"]').textContent = "";
+          submit.disabled = !owner.options.length;
+        } catch (error) {
+          if (ticket === loading)
+            form.querySelector('[role="status"]').textContent = error.message;
+        }
+      };
+      branch.onchange = () => {
+        request = null;
+        load(true);
+      };
+      dept.onchange = () => load();
+      form.elements.requestReference.onchange = () => load();
+      load(true);
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        submit.disabled = true;
+        try {
+          const body = Object.fromEntries(new FormData(form));
+          body.dueAt = new Date(body.dueAt).toISOString();
+          body.members = form.elements.members
+            ? [...form.elements.members.selectedOptions].map((o) =>
+                Number(o.value),
+              )
+            : [];
+          const result = await api("/api/admin/tasks", {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
+          toast("أُنشئت المهمة");
+          openTask(result.id);
+          if (state.section === "tasks") renderTasks();
+          updateNotificationCount();
+        } catch (error) {
+          form.querySelector('[role="status"]').textContent = error.message;
+          submit.disabled = false;
+        }
+      };
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+  async function openTask(id) {
+    try {
+      const data = await api(`/api/admin/tasks/${id}`),
+        t = data.task;
+      const write = hasPermission("tasks:write"),
+        edit =
+          write &&
+          (t.assigned_to === state.user.id ||
+            t.created_by === state.user.id ||
+            hasPermission("tasks:assign"));
+      const options = hasPermission("tasks:assign")
+        ? await api(
+            "/api/admin/tasks/options?" +
+              new URLSearchParams({
+                branchId: String(t.branch_id),
+                departmentId:
+                  t.department_id === null ? "" : String(t.department_id),
+                ...(t.request_id ? { requestId: String(t.request_id) } : {}),
+              }),
+          ).catch((error) => {
+            toast("تعذر تحميل الموظفين: " + error.message, "bad");
+            return { users: [] };
+          })
+        : null;
+      openDrawer(`<div class="drawer-head"><h2>${esc(t.title)}</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p class="badge-row"><span class="badge badge-soft">${TASK_STATUS[t.status]}</span><span class="badge badge-gold">${TASK_PRIORITY[t.priority]}</span></p><p style="white-space:pre-wrap">${esc(t.description || "دون وصف إضافي")}</p><p>المسؤول: ${esc(data.assigneeName || "غير متاح")}</p><p>الموعد: ${followDate(t.due_at)} بتوقيت عمّان</p><p>المشاركون: ${data.members.map((m) => esc(m.name)).join("، ") || "لا يوجد"}</p>${t.request_id ? `<button class="btn btn-ghost btn-sm" data-open-linked-request>فتح الطلب ${esc(data.requestReference)}</button>` : ""}
+        ${
+          edit
+            ? `<details><summary>تعديل المهمة ونقل المسؤولية</summary><form id="taskEdit" class="stack"><label>العنوان<input name="title" value="${esc(t.title)}" required minlength="3" maxlength="160"></label><label>الوصف<textarea name="description" maxlength="4000">${esc(t.description)}</textarea></label><label>الموعد بتوقيت جهازك<input name="dueAt" type="datetime-local" value="${localInput(t.due_at)}" required></label><label>الأولوية<select name="priority">${Object.entries(
+                TASK_PRIORITY,
+              )
+                .map(
+                  ([k, v]) =>
+                    `<option value="${k}" ${t.priority === k ? "selected" : ""}>${v}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label><label>الحالة<select name="status">${[t.status, ...data.statuses[t.status]].map((k) => `<option value="${k}">${TASK_STATUS[k]}</option>`).join("")}</select></label>${
+                options
+                  ? `<label>المسؤول<select name="assignedTo"><option value="${t.assigned_to}">${esc(data.assigneeName || "المسؤول الحالي")}</option>${options.users
+                      .filter((u) => u.id !== t.assigned_to)
+                      .map(
+                        (u) => `<option value="${u.id}">${esc(u.name)}</option>`,
+                      )
+                      .join("")}</select></label>`
+                  : ""
+              }<label>سبب التعديل أو نتيجة الإتمام<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ التغيير</button></form></details>`
+            : ""
+        }
+        <hr><section id="taskAttachments" aria-label="مرفقات المهمة" aria-live="polite"></section><hr><h3>قائمة التحقق</h3>${data.checklist.map((item) => `<label style="display:block;margin-block:10px"><input type="checkbox" data-task-check="${item.id}" ${item.done ? "checked" : ""} ${!write || ["done", "cancelled"].includes(t.status) ? "disabled" : ""}> ${esc(item.title)}</label>`).join("") || '<p class="muted">لا توجد بنود.</p>'}${write && !["done", "cancelled"].includes(t.status) ? '<form id="taskCheckAdd" class="stack"><label>بند جديد<input name="title" required maxlength="200"></label><p class="form-status is-error" role="status"></p><button class="btn btn-ghost">إضافة بند</button></form>' : ""}
+        <hr><h3>التعليقات</h3>${write ? '<form id="taskComment" class="stack"><label>تعليق داخلي<textarea name="body" required maxlength="2000"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">إضافة تعليق</button></form>' : ""}<ul class="timeline">${data.comments.map((c) => `<li><p style="white-space:pre-wrap">${esc(c.body)}</p><span>${esc(c.user_name)} · ${followDate(c.created_at)}</span></li>`).join("") || "<li>لا تعليقات بعد.</li>"}</ul>
+        <h3>سجل المهمة (آخر 100 حدث)</h3><ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.reason)}</b><span>${esc(e.actor_name || "النظام")} · ${followDate(e.created_at)}</span>${e.before_json ? `<small>${taskEventChange(e)}</small>` : ""}</li>`).join("")}</ul>`);
+      loadTaskAttachments(id,!['done','cancelled'].includes(t.status));
+      $("[data-open-linked-request]")?.addEventListener("click", () =>
+        openRequest(t.request_id),
+      );
+      const submitForm = (selector, path, method, build) => {
+        $(selector)?.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const form = event.target,
+            button = form.querySelector("button");
+          button.disabled = true;
+          try {
+            await api(path, {
+              method,
+              body: JSON.stringify(build(Object.fromEntries(new FormData(form)))),
+            });
+            toast("تم الحفظ");
+            await openTask(id);
+            if (state.section === "tasks") renderTasks();
+            updateNotificationCount();
+          } catch (error) {
+            form.querySelector('[role="status"]').textContent = error.message;
+          } finally {
+            button.disabled = false;
+          }
+        });
+      };
+      submitForm("#taskEdit", `/api/admin/tasks/${id}`, "PATCH", (body) => ({
+        ...body,
+        dueAt: new Date(body.dueAt).toISOString(),
+        version: t.version,
+      }));
+      submitForm(
+        "#taskComment",
+        `/api/admin/tasks/${id}/comments`,
+        "POST",
+        (body) => body,
+      );
+      submitForm(
+        "#taskCheckAdd",
+        `/api/admin/tasks/${id}/checklist`,
+        "POST",
+        (body) => body,
+      );
+      $$("[data-task-check]").forEach(
+        (box) =>
+          (box.onchange = async () => {
+            box.disabled = true;
+            try {
+              const item = data.checklist.find(
+                (i) => i.id === Number(box.dataset.taskCheck),
+              );
+              await api(`/api/admin/task-checklist/${item.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                  done: box.checked,
+                  version: item.version,
+                }),
+              });
+              openTask(id);
+            } catch (error) {
+              box.checked = !box.checked;
+              box.disabled = false;
+              toast(error.message, "bad");
+            }
+          }),
+      );
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }
+
+  async function loadTaskAttachments(id,allowUpload=true){
+    const slot=$('#taskAttachments');if(!slot)return;slot.innerHTML='<p>جارٍ تحميل المرفقات…</p>';
+    try{
+      const data=await api('/api/admin/tasks/'+id+'/attachments');if(!slot.isConnected)return;
+      slot.innerHTML=`<h3>الملفات والصوت</h3>${data.uploadEnabled===true?'<p class="muted">PDF وصور PNG/JPEG وصوت WAV/MP3/OGG. الحد5ميغابايت للملف. يلزم نجاح فحص الأمان.</p>':'<p class="muted">رفع المرفقات الجديدة غير متاح حاليًا. المرفقات المحفوظة متاحة حسب صلاحياتك.</p>'}<ul class="timeline">${data.attachments.map(f=>`<li><b>${esc(f.filename)}</b><span>${num(Math.ceil(f.bytes/1024))} كيلوبايت · ${followDate(f.created_at)}</span><a class="btn btn-ghost btn-sm" href="/api/admin/task-attachments/${f.id}" download>تنزيل</a>${f.mime.startsWith('audio/')?`<audio controls preload="none" src="/api/admin/task-attachments/${f.id}?preview=1" aria-label="${esc(f.filename)}"></audio>`:f.mime.startsWith('image/')?`<details><summary>معاينة الصورة</summary><img loading="lazy" src="/api/admin/task-attachments/${f.id}?preview=1" alt="${esc(f.filename)}" style="max-width:100%;max-height:200px"></details>`:''}</li>`).join('')||'<li>لا توجد مرفقات.</li>'}</ul>${data.uploadEnabled===true&&allowUpload&&hasPermission('tasks:write')?'<form id="taskAttachmentForm" class="stack"><label>ملف أو رسالة صوتية<input name="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.wav,.mp3,.ogg,.opus" required></label><p class="form-status" role="status"></p><button class="btn btn-primary">رفع وفحص</button></form>':''}`;
+      $('#taskAttachmentForm')?.addEventListener('submit',async event=>{
+        event.preventDefault();const form=event.target,button=form.querySelector('button'),status=form.querySelector('[role="status"]'),file=form.elements.file.files[0];
+        if(!file||file.size>data.maxBytes){status.textContent='اختر ملفًا حتى5ميغابايت';return;}
+        button.disabled=true;status.textContent='جارٍ الرفع وفحص الأمان…';
+        try{const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(new Error('تعذرت قراءة الملف'));reader.readAsDataURL(file);});await api('/api/admin/tasks/'+id+'/attachments',{method:'POST',body:JSON.stringify({filename:file.name,base64})});toast('حُفظ الملف بعد الفحص');loadTaskAttachments(id,allowUpload);}
+        catch(error){status.textContent=error.message;status.classList.add('is-error');}finally{button.disabled=false;}
+      });
+    }catch(error){if(slot.isConnected){slot.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-retry-attachment>إعادة المحاولة</button>`;$('[data-retry-attachment]',slot).onclick=()=>loadTaskAttachments(id,allowUpload);}}
+  }
+
+  function taskEventChange(event) {
+    try {
+      const old = JSON.parse(event.before_json),
+        next = JSON.parse(event.after_json);
+      return [
+        old.status !== next.status && next.status
+          ? `${TASK_STATUS[old.status]} ← ${TASK_STATUS[next.status]}`
+          : "",
+        old.assigned_to !== next.assigned_to && next.assigned_to
+          ? `نُقلت المسؤولية من ${event.from_assignee_name || "المسؤول السابق"} إلى ${event.to_assignee_name || "المسؤول الجديد"}`
+          : "",
+        old.due_at !== next.due_at && next.due_at
+          ? `تغير الموعد إلى ${followDate(next.due_at)}`
+          : "",
+      ]
+        .filter(Boolean)
+        .map(esc)
+        .join(" · ");
+    } catch {
+      return "";
+    }
+  }
+
+  /* ---------------- scoped request follow-ups ---------------- */
+  const FOLLOW_STATUS = { open: 'مفتوحة', done: 'مكتملة', cancelled: 'ملغاة' };
+  const followDate = (iso) => new Date(iso).toLocaleString('ar-JO', { timeZone:'Asia/Amman', dateStyle:'short', timeStyle:'short' });
+  function followRows(data) {
+    return `<p class="muted">المواعيد المعروضة بتوقيت عمّان · ${num(data.total)} متابعة · ${data.page}/${data.pages}</p>
+      <div class="admin-card"><div class="admin-card-body" style="overflow-x:auto"><table class="admin-table"><thead><tr><th>الطلب</th><th>المتابعة</th><th>المسؤول</th><th>الموعد</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
+      ${data.followUps.map((f) => `<tr><td><button class="btn btn-ghost btn-sm ref" data-follow-request="${f.request_id}">${esc(f.reference)}</button></td><td style="white-space:pre-wrap">${esc(f.note)}</td><td>${esc(f.assignee_name || 'غير متاح')}</td><td>${esc(followDate(f.due_at))}${f.overdue ? '<br><span class="badge badge-danger">متأخرة</span>' : ''}</td><td>${esc(FOLLOW_STATUS[f.status])}</td><td>${f.status === 'open' && hasPermission('requests:write') && (f.assigned_to === state.user.id || hasPermission('requests:assign')) ? `<button class="btn btn-primary btn-sm" data-follow-finish="${f.id}" data-result="done">إكمال</button> <button class="btn btn-ghost btn-sm" data-follow-finish="${f.id}" data-result="cancelled">إلغاء</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6">لا توجد متابعات مطابقة.</td></tr>'}
+      </tbody></table></div></div>`;
+  }
+  function bindFollowRows(container, data, refresh) {
+    $$('[data-follow-request]',container).forEach((b) => b.onclick = () => openRequest(Number(b.dataset.followRequest)));
+    $$('[data-follow-finish]',container).forEach((b) => b.onclick = () => {
+      const item = data.followUps.find((f) => f.id === Number(b.dataset.followFinish));
+      openDrawer(`<div class="drawer-head"><h2>${b.dataset.result === 'done' ? 'إكمال المتابعة' : 'إلغاء المتابعة'}</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><p>${esc(item.note)}</p><form id="followFinishForm" class="stack"><label>النتيجة أو سبب الإلغاء<textarea name="reason" required minlength="3" maxlength="500"></textarea></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">حفظ</button></form>`);
+      $('#followFinishForm').onsubmit = async (event) => {
+        event.preventDefault(); const button = event.target.querySelector('button'); button.disabled = true;
+        try { await api(`/api/admin/follow-ups/${item.id}/finish`, {method:'POST',body:JSON.stringify({status:b.dataset.result,reason:new FormData(event.target).get('reason')})}); closeDrawer(); toast('تم حفظ نتيجة المتابعة'); refresh(); }
+        catch(error) { event.target.querySelector('[role="status"]').textContent=error.message; }
+        finally { button.disabled=false; }
+      };
+    });
+  }
+  async function loadRequestFollowUps(id, page=1) {
+    const slot = $('#requestFollowUps'); if (!slot) return;
+    slot.innerHTML = '<p role="status">جارٍ تحميل المتابعات…</p>';
+    try {
+      const data = await api(`/api/admin/requests/${id}/follow-ups?status=all&page=${page}`);
+      if (!slot.isConnected) return;
+      slot.innerHTML = `<h3>متابعات الطلب</h3>${followRows(data)}<div class="btn-row"><button class="btn btn-ghost btn-sm" data-prev ${page<=1?'disabled':''}>السابق</button><button class="btn btn-ghost btn-sm" data-next ${page>=data.pages?'disabled':''}>التالي</button></div>
+        ${hasPermission('requests:write') ? `<form id="followCreateForm" class="stack mt-3"><label>وصف المتابعة<textarea name="note" required minlength="3" maxlength="2000"></textarea></label><label>الموعد بتوقيت جهازك (${esc(Intl.DateTimeFormat().resolvedOptions().timeZone)})<input type="datetime-local" name="dueAt" required></label><label>مسؤول المتابعة<select name="assignedTo">${data.assignees.map((u)=>`<option value="${u.id}" ${u.id===state.user.id?'selected':''}>${esc(u.name)}</option>`).join('')}</select></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary btn-sm">إضافة متابعة</button></form>` : ''}`;
+      bindFollowRows(slot,data,()=>openRequest(id));
+      $('[data-prev]',slot).onclick=()=>loadRequestFollowUps(id,page-1);
+      $('[data-next]',slot).onclick=()=>loadRequestFollowUps(id,page+1);
+      $('#followCreateForm')?.addEventListener('submit',async(event)=>{
+        event.preventDefault();const button=event.target.querySelector('button');button.disabled=true;
+        try { const body=Object.fromEntries(new FormData(event.target)); body.dueAt=new Date(body.dueAt).toISOString(); await api(`/api/admin/requests/${id}/follow-ups`,{method:'POST',body:JSON.stringify(body)}); toast('أُضيفت المتابعة'); loadRequestFollowUps(id); }
+        catch(error) { event.target.querySelector('[role="status"]').textContent=error.message; }
+        finally { button.disabled=false; }
+      });
+    } catch(error) { if(slot.isConnected) slot.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost btn-sm" data-retry-follow>إعادة المحاولة</button>`; $('[data-retry-follow]',slot)?.addEventListener('click',()=>loadRequestFollowUps(id,page)); }
+  }
+  async function renderFollowUps(page=1) {
+    const view=$('#view');
+    try {
+      const params=new URLSearchParams({...state.query,page:String(page)});
+      const data=await api(`/api/admin/follow-ups?${params}`);
+      if(state.section!=='followups') return;
+      view.innerHTML=`<div class="toolbar"><label>الحالة<select data-follow-filter="status">${[['open','مفتوحة'],['done','مكتملة'],['cancelled','ملغاة'],['all','كل الحالات']].map(([k,v])=>`<option value="${k}" ${(state.query.status||'open')===k?'selected':''}>${v}</option>`).join('')}</select></label><label>الموعد<select data-follow-filter="due"><option value="">كل المواعيد</option><option value="overdue" ${state.query.due==='overdue'?'selected':''}>متأخرة</option><option value="next24h" ${state.query.due==='next24h'?'selected':''}>خلال 24 ساعة</option></select></label>${hasPermission('requests:assign')?`<label>المسؤول<select data-follow-filter="assigned"><option value="me">متابعاتي</option><option value="team" ${state.query.assigned==='team'?'selected':''}>الفريق ضمن نطاقي</option></select></label>`:''}<button class="btn btn-primary btn-sm" data-follow-apply>تصفية</button></div>${followRows(data)}<div class="btn-row mt-3"><button class="btn btn-ghost" data-prev ${page<=1?'disabled':''}>السابق</button><button class="btn btn-ghost" data-next ${page>=data.pages?'disabled':''}>التالي</button></div><p class="muted">لإضافة متابعة، افتح الطلب واختر «متابعات الطلب».</p>`;
+      bindFollowRows(view,data,()=>renderFollowUps(page));
+      $('[data-follow-apply]',view).onclick=()=>{ state.query={}; $$('[data-follow-filter]',view).forEach((el)=>{if(el.value)state.query[el.dataset.followFilter]=el.value;});renderFollowUps(); };
+      $('[data-prev]',view).onclick=()=>renderFollowUps(page-1);
+      $('[data-next]',view).onclick=()=>renderFollowUps(page+1);
+    } catch(error) { if(state.section==='followups') { view.innerHTML=`<p class="form-status is-error">${esc(error.message)}</p><button class="btn btn-ghost" data-retry-follow>إعادة المحاولة</button>`; $('[data-retry-follow]',view).onclick=()=>renderFollowUps(page); } }
+  }
+
   /* ---------------- requests ---------------- */
   async function renderRequests(page = 1) {
     const params = new URLSearchParams({ ...state.query, page: String(page) });
@@ -412,6 +994,7 @@
             <button class="btn btn-danger btn-sm" data-transfer-response="${transfer.id}" data-decision="reject">رفض</button>` : '—'}</td></tr>`).join('')}</tbody></table>
         </div></div>` : ''}
       <div class="toolbar">
+        <select data-filter="assigned" aria-label="إسناد الطلب"><option value="">كل الطلبات المخولة</option><option value="unassigned" ${state.query.assigned === 'unassigned' ? 'selected' : ''}>غير المخصصة</option><option value="me" ${state.query.assigned === 'me' ? 'selected' : ''}>المسندة لي</option></select>
         <select data-filter="type"><option value="">كل الأنواع</option>${Object.entries(data.types || {}).map(([k, t]) => `<option value="${k}" ${state.query.type === k ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
         <select data-filter="status"><option value="">كل الحالات</option>${Object.entries(data.statuses || {}).map(([k, v]) => `<option value="${k}" ${state.query.status === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
         <input data-filter="q" placeholder="بحث بالمرجع أو الاسم أو الهاتف" value="${esc(state.query.q || '')}">
@@ -563,12 +1146,16 @@
       <div class="field"><textarea id="dNote" rows="3" placeholder="ملاحظة تظهر للفريق فقط"></textarea></div>
       <button class="btn btn-primary btn-sm mt-2" data-add-note>إضافة الملاحظة</button>` : ''}
       <hr>
+      ${hasPermission('tasks:write')?'<button class="btn btn-ghost btn-sm" data-new-linked-task>مهمة مرتبطة بهذا الطلب</button>':''}
+      <section id="requestFollowUps" aria-label="متابعات الطلب" aria-live="polite"></section><hr>
       <h3>السجل</h3>
       <ul class="timeline">${data.events.map((e) => `<li><b>${esc(e.message || e.kind)}</b><span>${esc(e.actor_name || 'النظام')} · ${dt(e.created_at)}</span></li>`).join('')}</ul>
       <div class="btn-row mt-2"><button class="btn btn-gold btn-sm" type="button" data-voucher-admin>قسيمة الحجز</button></div>
       ${payload.phone ? `<div class="btn-row mt-3"><a class="btn btn-wa btn-sm" href="https://wa.me/${String(payload.phone).replace(/\D/g, '')}" target="_blank" rel="noopener">واتساب العميل</a><a class="btn btn-ghost btn-sm" href="tel:${esc(payload.phone)}">اتصال</a></div>` : ''}
     `);
 
+    $('[data-new-linked-task]')?.addEventListener('click',()=>openTaskCreate(r));
+    loadRequestFollowUps(id);
     const refresh = () => { closeDrawer(); openRequest(id); };
     $('[data-voucher-admin]')?.addEventListener('click', () => {
       if (!window.VoucherGenerator) { toast('وحدة القسيمة لم تُحمّل. أعد تحميل الصفحة.', 'bad'); return; }
@@ -1146,6 +1733,7 @@
     const data = await api("/api/admin/organization");
     const scopeLabels = { organization: 'كل المؤسسة', branch: 'الفرع', department: 'القسم', assigned: 'الطلبات المسندة' };
     const permissionLabels = {
+      "tasks:read":"عرض المهام", "tasks:write":"إنشاء وتحديث المهام", "tasks:assign":"إسناد المهام للغير",
       "overview:read": "نظرة عامة",
       "requests:read": "عرض الطلبات",
       "requests:write": "تحديث الطلبات",

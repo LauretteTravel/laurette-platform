@@ -1,3 +1,7 @@
+import * as DEADLINES from './lib/deadlines.js';
+import * as ATTACHMENTS from './lib/task-attachments.js';
+import * as TASKS from './lib/tasks-api.js';
+import * as FOLLOW_UPS from './lib/follow-ups.js';
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -251,7 +255,30 @@ export function createApp(options = {}) {
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
 
+  router.get('/api/admin/deadlines',api(DEADLINES.deadlineDashboard,{action:'tasks:read'}));
+  router.get('/api/admin/deadline-alerts',api(DEADLINES.deadlineAlerts,{action:'tasks:read'}));
+  router.post('/api/admin/deadline-alerts/:id/read',api(DEADLINES.readDeadlineAlert,{action:'tasks:read'}));
+  router.get('/api/admin/deadline-policy',api(DEADLINES.getDeadlinePolicy,{action:'organization:write'}));
+  router.post('/api/admin/deadline-policy',api(DEADLINES.setDeadlinePolicy,{action:'organization:write'}));
+  router.post('/api/admin/deadlines/run',api(DEADLINES.runDeadlines,{action:'organization:write'}));
+  router.get('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.listAttachments,{action:'tasks:read'}));
+  router.post('/api/admin/tasks/:id/attachments',api(ATTACHMENTS.uploadAttachment,{action:'tasks:write'}));
+  router.get('/api/admin/task-attachments/:id',api(ATTACHMENTS.downloadAttachment,{action:'tasks:read'}));
+  router.get('/api/admin/tasks/options', api(TASKS.taskOptions,{action:'tasks:read'}));
+  router.get('/api/admin/tasks', api(TASKS.listTasks,{action:'tasks:read'}));
+  router.get('/api/admin/tasks/:id', api(TASKS.getTask,{action:'tasks:read'}));
+  router.post('/api/admin/tasks', api(TASKS.createTask,{action:'tasks:write'}));
+  router.patch('/api/admin/tasks/:id', api(TASKS.updateTask,{action:'tasks:write'}));
+  router.post('/api/admin/tasks/:id/comments', api(TASKS.commentTask,{action:'tasks:write'}));
+  router.post('/api/admin/tasks/:id/checklist', api(TASKS.addChecklist,{action:'tasks:write'}));
+  router.patch('/api/admin/task-checklist/:id', api(TASKS.checkItem,{action:'tasks:write'}));
+  router.get('/api/admin/notifications', api(TASKS.notifications,{action:'tasks:read'}));
+  router.post('/api/admin/notifications/:id/read', api(TASKS.readNotification,{action:'tasks:read'}));
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
+  router.get('/api/admin/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
+  router.get('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
+  router.post('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.createFollowUp, { action: 'requests:write' }));
+  router.post('/api/admin/follow-ups/:id/finish', api(FOLLOW_UPS.finishFollowUp, { action: 'requests:write' }));
   router.get('/api/admin/requests', api(API.listRequests, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id', api(API.getRequest, { action: 'requests:read' }));
   router.patch('/api/admin/requests/:id', api(API.updateRequest, { action: 'requests:write' }));
@@ -567,6 +594,8 @@ export function createApp(options = {}) {
     return sendHtml(ctx, err.status || 500, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   }
 
+  const deadlineWorker=setInterval(()=>{try{DEADLINES.runDeadlineJob(db);}catch{console.error('[deadlines] Scheduler failed; inspect database and policy');}},60000);
+  deadlineWorker.unref();
   const server = http.createServer((req, res) => {
     res.on('finish', () => {
       if (process.env.LOG_REQUESTS === '1') console.log(`${req.method} ${req.url} ${res.statusCode}`);
@@ -589,6 +618,7 @@ export function createApp(options = {}) {
       });
     },
     close() {
+      clearInterval(deadlineWorker);
       if (whatsappWorker) clearInterval(whatsappWorker);
       return new Promise((resolvePromise) => {
         server.close(() => {
