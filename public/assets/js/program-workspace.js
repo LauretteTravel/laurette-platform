@@ -224,7 +224,7 @@ window.ProgramWorkspace = {
           category: "",
           pricing: [],
           display_price: 0,
-          art_key: "haram",
+          art_key: "plane",
           currency: "JOD",
         },
         branch_id: meta.current.branchId,

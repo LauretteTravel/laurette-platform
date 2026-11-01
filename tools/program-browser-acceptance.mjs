@@ -187,6 +187,11 @@ try {
     path: join(out, "review-desktop.png"),
     fullPage: true,
   });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({
+    path: join(out, "review-overview.png"),
+    fullPage: false,
+  });
   await page.locator("[data-command=approve]").click();
   await page.locator("[data-command=publish]").waitFor();
   assert.equal(

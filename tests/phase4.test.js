@@ -210,6 +210,9 @@ test("4 legacy catalogue stays intact and fresh seeds acquire private workspaces
   const org = actor({ scope: "organization" }),
     r = await call(basePath, { user: org });
   assert.ok(r.data.total >= count);
+  const fractional = await call(basePath + "?page=1.5", { user: org });
+  assert.equal(fractional.status, 200);
+  assert.equal(fractional.data.page, 1);
   const legacy = db.prepare("SELECT * FROM programs LIMIT 1").get();
   assert.equal((await call(path("legacy-" + legacy.id))).status, 404);
   for (const [p, m] of [
