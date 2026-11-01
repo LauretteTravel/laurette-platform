@@ -1,0 +1,41 @@
+/* Staff-only polish; public website and document templates keep their own styles. */
+.admin-body { --muted: #4c6173; --warn: #875213; }
+.admin-body .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.admin-skip { position:fixed; inset-block-start:8px; inset-inline-start:12px; z-index:400; background:#fff; color:#0b2a43; border:2px solid #17638f; border-radius:8px; padding:10px 18px; transform:translateY(-200%); }
+.admin-skip:focus { transform:none; }
+.admin-body :focus-visible { outline:3px solid #17638f; outline-offset:3px; }
+.admin-side :focus-visible { outline-color:#f5cb87; }
+.admin-body button, .admin-body input, .admin-body select, .admin-body textarea { scroll-margin-block:24px; }
+.admin-account { margin-block-start:auto; padding-block-start:18px; font-size:12px; color:#becbd5; }
+.admin-side .brand-text span { color:#becbd5; }
+.admin-side nav { min-width:0; }
+.admin-side #logoutBtn { color:#fff; background:#183e57; border-color:#678196; }
+.admin-main, #pageTitle { scroll-margin-block:20px; }
+.admin-body .drawer-backdrop { padding:0; margin:0; border:0; width:100%; max-width:none; height:100%; max-height:none; background:transparent; color:var(--ink); }
+.admin-body .drawer-backdrop:not([open]) { display:none; }
+.drawer-backdrop::backdrop { background:rgba(6,24,38,.6); }
+.admin-body .drawer { overscroll-behavior:contain; }
+.admin-body .drawer-close { flex-shrink:0; min-width:40px; min-height:40px; color:#0b2a43; }
+.admin-body .table-action { font:inherit; font-weight:700; color:#0b527b; border:1px solid transparent; border-radius:6px; background:transparent; min-height:32px; padding:3px 6px; cursor:pointer; text-align:start; }
+.admin-body .table-action:hover { background:#eaf3f9; text-decoration:underline; }
+.admin-body .health-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.health-card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; overflow-wrap:anywhere; }
+.health-card h2 { margin:0 0 12px; font-size:18px; }
+.health-card p { margin-block:8px; }
+.health-card ul { margin-block:8px; padding-inline-start:22px; }
+.health-note { border-inline-start:4px solid #d9a34a; padding:12px 16px; background:#fbf3e4; color:#543815; border-radius:8px; }
+.health-warning { color:#8a321b; font-weight:700; }
+.health-ok { color:#1c624b; font-weight:700; }
+.health-meta { color:var(--muted); font-size:13px; }
+.health-grid time { direction:ltr; unicode-bidi:isolate; }
+@media (max-width:1100px) {
+  .admin-side nav { flex:1 1 100%; width:100%; }
+  .admin-side .admin-nav { width:100%; }
+  .admin-account { padding-block-start:8px; }
+}
+@media (max-width:700px) { .admin-body .health-grid { grid-template-columns:1fr; } }
+@media (prefers-reduced-motion:no-preference) {
+  .admin-body .btn { transition:background-color 160ms,color 160ms,border-color 160ms; }
+  .admin-body .drawer { animation:staff-panel-in 160ms ease-out; }
+  @keyframes staff-panel-in { from { opacity:.7; transform:translateX(-12px); } to { opacity:1; transform:none; } }
+}

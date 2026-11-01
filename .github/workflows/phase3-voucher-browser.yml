@@ -20,7 +20,7 @@ jobs:
           node-version: "24.x"
       - name: Install isolated browser test dependencies
         run: |
-          npm install --prefix "$RUNNER_TEMP/voucher-browser" --ignore-scripts --no-audit --no-fund playwright@1.64.1
+          npm install --prefix "$RUNNER_TEMP/voucher-browser" --ignore-scripts --no-audit --no-fund playwright@1.64.1 axe-core@4.10.3
           "$RUNNER_TEMP/voucher-browser/node_modules/.bin/playwright" install --with-deps chromium
           sudo apt-get update -qq
           sudo apt-get install -y -qq poppler-utils
@@ -56,4 +56,15 @@ jobs:
         with:
           name: synthetic-report-evidence
           path: ${{ runner.temp }}/voucher-evidence/phase5
+          retention-days: 7
+      - name: Staff accessibility, keyboard, operational health and measured performance
+        run: node tools/staff-quality-acceptance.mjs
+        env:
+          VOUCHER_TEST_DEPS: ${{ runner.temp }}/voucher-browser
+          VOUCHER_EVIDENCE: ${{ runner.temp }}/voucher-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-staff-quality-evidence
+          path: ${{ runner.temp }}/voucher-evidence/phase6
           retention-days: 7

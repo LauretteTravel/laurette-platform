@@ -62,6 +62,7 @@
 
   /* ---------------- login ---------------- */
   function renderLogin(message = "") {
+    root.setAttribute('role', 'main');
     closeDrawer();
     clearInterval(notificationTimer);notificationTimer=null;
     root.innerHTML = `<div class="login-wrap">
@@ -74,7 +75,7 @@
         <p class="muted" style="font-size:13px">للوصول إلى الطلبات والعملاء والبرامج. المحاولات محدودة لحماية الحساب.</p>
         <div class="field"><label for="lu">اسم المستخدم</label><input id="lu" name="username" autocomplete="username" dir="ltr" required></div>
         <div class="field"><label for="lp">كلمة المرور</label><input id="lp" name="password" type="password" autocomplete="current-password" dir="ltr" required></div>
-        <p class="form-status is-error" id="lerr">${esc(message)}</p>
+        <p class="form-status is-error" id="lerr" role="alert">${esc(message)}</p>
         <button class="btn btn-primary btn-block" type="submit">دخول</button>
       </form>
     </div>`;
@@ -97,6 +98,7 @@
   }
 
   function renderMfaLogin(challenge) {
+    root.setAttribute("role","main");
     root.innerHTML = `<div class="login-wrap"><form class="login-card" id="mfaLogin"><h1>التحقق بخطوتين</h1><p>أدخل رمز تطبيق المصادقة أو أحد رموز الاستعادة.</p><label>رمز التحقق<input name="code" autocomplete="one-time-code" dir="ltr" required maxlength="32"></label><p class="form-status is-error" role="status"></p><button class="btn btn-primary">تحقق</button><button type="button" class="btn btn-ghost" data-back>رجوع</button></form></div>`;
     $("[data-back]").onclick = () => renderLogin();
     $("#mfaLogin").onsubmit = async (event) => {
@@ -120,6 +122,7 @@
     };
   }
   function renderMfaEnrollment() {
+    root.setAttribute("role","main");
     root.innerHTML = `<div class="login-wrap"><div class="login-card"><h1>تأمين حساب المسؤول</h1><p>يلزم ربط تطبيق مصادقة قبل استخدام الصلاحيات الإدارية. لن تظهر بيانات العمل قبل إكمال التحقق.</p><form id="mfaSetup"><label>كلمة المرور الحالية<input name="password" type="password" autocomplete="current-password" required></label><button class="btn btn-primary">بدء الربط</button><p class="form-status is-error" role="status"></p></form><div id="mfaConfirmSlot"></div><button class="btn btn-ghost" data-mfa-logout>خروج</button></div></div>`;
     $("[data-mfa-logout]").onclick = async () => {
       await api("/api/auth/logout", { method: "POST" });
@@ -185,6 +188,7 @@
     { id: 'organization', label: 'الفروع والأقسام والأدوار', icon: '⌂', permission: 'organization:read' },
     { id: 'settings', label: 'الإعدادات', icon: '⚙', permission: 'settings:write' },
     { id: 'audit', label: 'سجل العمليات', icon: '≡', permission: 'audit:read' },
+    { id: 'systemHealth', label: 'صحة النظام', icon: '◈', permission: 'system:health' },
     { id: 'assistant', label: 'محادثات المساعد', icon: '✧', permission: 'overview:read' },
   ];
 
@@ -206,31 +210,32 @@
     }
     if (state.user.mfaRequired && !state.user.mfaVerified)
       return renderMfaEnrollment();
+    root.removeAttribute('role');
     const sections = visibleSections();
     if(!sections.length){root.innerHTML='<div class="login-wrap"><div class="login-card"><h1>لا توجد صلاحيات مفعلة</h1><p>اطلب من المسؤول تعيين دور مناسب لحسابك.</p><button data-no-access-logout>خروج</button></div></div>'; $('[data-no-access-logout]').onclick=async()=>{await api('/api/auth/logout',{method:'POST'});renderLogin();};return;}
     if (!sections.find((s) => s.id === state.section)) state.section = sections[0].id;
-    root.innerHTML = `<div class="admin-shell">
+    root.innerHTML = `<a class="admin-skip" href="#staffMain">تجاوز إلى محتوى العمل</a><div class="admin-shell">
       <aside class="admin-side">
         <a class="brand" href="/" style="text-decoration:none">
           <span class="brand-mark">ل</span>
           <span class="brand-text"><b>لوريت</b><span>لوحة الإدارة</span></span>
         </a>
-        <ul class="admin-nav">
-          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : ''}</button></li>`).join('')}
-        </ul>
-        <div style="margin-top:auto;padding-top:18px;font-size:12px;color:rgba(255,255,255,.55)">
+        <nav aria-label="أقسام نظام الموظفين"><ul class="admin-nav">
+          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" ${state.section === s.id ? 'aria-current="page"' : ''} class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : ''}</button></li>`).join('')}
+        </ul></nav>
+        <div class="admin-account">
           <div style="margin-bottom:8px">${esc(state.user.name)} · ${esc(state.user.roleName || { admin: 'مدير', manager: 'مدير قسم', agent: 'موظف' }[state.user.role] || state.user.role)}</div>
           <button class="btn btn-ghost btn-sm" type="button" id="logoutBtn">خروج</button>
         </div>
       </aside>
-      <main class="admin-main">
+      <main class="admin-main" id="staffMain" tabindex="-1">
         <div class="admin-top">
-          <h1 id="pageTitle">${esc(sections.find((s) => s.id === state.section)?.label || '')}</h1>
+          <h1 id="pageTitle" tabindex="-1">${esc(sections.find((s) => s.id === state.section)?.label || '')}</h1>
           <span class="spacer"></span>
           ${hasPermission('tasks:read')?'<button class="btn btn-ghost btn-sm" id="staffNotifications" aria-label="فتح الإشعارات">الإشعارات</button>':''}<label id="membershipSlot"></label><span class="admin-user">${esc(state.user.department || "")}</span>
           <a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">عرض الموقع</a>
         </div>
-        <div id="view"></div>
+        <p id="viewStatus" class="sr-only" role="status"></p><div id="view"></div>
       </main>
     </div>`;
 
@@ -274,6 +279,7 @@
   }
 
   function renderRequiredPasswordChange() {
+    root.setAttribute("role","main");
     root.innerHTML = `<div class="login-wrap">
       <form class="login-card" id="requiredPasswordForm" autocomplete="on">
         <div class="brand" style="margin-bottom:18px"><span class="brand-mark">ل</span>
@@ -324,15 +330,18 @@
     const btn = e.target.closest('[data-section]');
     if (!btn) return;
     state.section = btn.dataset.section;
-    $$('.admin-nav button').forEach((b) => b.classList.toggle('is-active', b.dataset.section === state.section));
+    $$('.admin-nav button').forEach((b) => { const active=b.dataset.section === state.section; b.classList.toggle('is-active',active); if(active)b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
     $('#pageTitle').textContent = btn.textContent.replace(/\d+$/, '').trim();
-    loadSection();
+    loadSection({ focus: true });
   }
 
-  function loadSection() {
+  async function loadSection({ focus = false } = {}) {
     const view = $('#view');
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
+    view.setAttribute('aria-busy','true');
+    const section = state.section;
+    $('#viewStatus').textContent='جارٍ تحميل القسم';
     const map = {
       overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
@@ -340,8 +349,21 @@
       voucherArchive: () => window.VoucherLedger.mount(view,{api,hasPermission}),
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
       reports: renderReports, marketing: renderMarketing,
+      systemHealth: () => window.SystemHealth.mount(view,{api}),
     };
-    (map[state.section] || renderOverview)();
+    try { await (map[section] || renderOverview)(); }
+    catch(error) {
+      if(view.isConnected && section===state.section) {
+        view.innerHTML=`<div class="admin-card"><div class="admin-card-body"><p role="alert">${esc(error.message || 'تعذر تحميل القسم')}</p><button class="btn btn-primary" data-retry-section>إعادة المحاولة</button></div></div>`;
+        $('[data-retry-section]',view).onclick=()=>loadSection({focus:true});
+      }
+    } finally {
+      if(view.isConnected && section===state.section) {
+        view.setAttribute('aria-busy','false');
+        $('#viewStatus').textContent='اكتمل تحميل القسم';
+        if(focus)$('#pageTitle').focus({preventScroll:true});
+      }
+    }
   }
 
   /* ---------------- manual voucher (standalone) ---------------- */
@@ -377,7 +399,7 @@
         <div class="admin-card-body" style="padding:0">
           <table class="admin-table"><thead><tr><th>المرجع</th><th>النوع</th><th>الملخص</th><th>الحالة</th><th>آخر تحديث</th></tr></thead>
           <tbody>${data.needsAction.length ? data.needsAction.map((r) => `<tr data-request="${r.id}">
-            <td class="ref">${esc(r.reference)}</td><td>${esc(data.types[r.type]?.label || r.type)}</td>
+            <td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td><td>${esc(data.types[r.type]?.label || r.type)}</td>
             <td>${esc(r.summary || '')}</td><td><span class="status-dot status-${r.status}">${esc(data.statuses[r.status]?.label)}</span></td>
             <td>${dt(r.updated_at)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">لا توجد طلبات تحتاج متابعة الآن.</td></tr>'}
           </tbody></table>
@@ -388,7 +410,7 @@
         <div class="admin-card-body" style="padding:0">
           <table class="admin-table"><thead><tr><th>المرجع</th><th>العميل</th><th>النوع</th><th>الحالة</th><th>التاريخ</th></tr></thead>
           <tbody>${data.recent.length ? data.recent.map((r) => `<tr data-request="${r.id}">
-            <td class="ref">${esc(r.reference)}</td><td>${esc(r.customer || '—')}</td>
+            <td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td><td>${esc(r.customer || '—')}</td>
             <td>${esc(data.types[r.type]?.label || r.type)}</td>
             <td><span class="status-dot status-${r.status}">${esc(data.statuses[r.status]?.label)}</span></td>
             <td>${dt(r.created_at)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">لا توجد طلبات بعد. الطلبات الواردة من الموقع ستظهر هنا مباشرة.</td></tr>'}
@@ -997,9 +1019,9 @@
         </div></div>` : ''}
       <div class="toolbar">
         <select data-filter="assigned" aria-label="إسناد الطلب"><option value="">كل الطلبات المخولة</option><option value="unassigned" ${state.query.assigned === 'unassigned' ? 'selected' : ''}>غير المخصصة</option><option value="me" ${state.query.assigned === 'me' ? 'selected' : ''}>المسندة لي</option></select>
-        <select data-filter="type"><option value="">كل الأنواع</option>${Object.entries(data.types || {}).map(([k, t]) => `<option value="${k}" ${state.query.type === k ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
-        <select data-filter="status"><option value="">كل الحالات</option>${Object.entries(data.statuses || {}).map(([k, v]) => `<option value="${k}" ${state.query.status === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
-        <input data-filter="q" placeholder="بحث بالمرجع أو الاسم أو الهاتف" value="${esc(state.query.q || '')}">
+        <select data-filter="type" aria-label="نوع الخدمة"><option value="">كل الأنواع</option>${Object.entries(data.types || {}).map(([k, t]) => `<option value="${k}" ${state.query.type === k ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>
+        <select data-filter="status" aria-label="حالة الطلب"><option value="">كل الحالات</option>${Object.entries(data.statuses || {}).map(([k, v]) => `<option value="${k}" ${state.query.status === k ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+        <input data-filter="q" aria-label="بحث الطلبات" placeholder="بحث بالمرجع أو الاسم أو الهاتف" value="${esc(state.query.q || '')}">
         <button class="btn btn-ghost btn-sm" data-apply>تصفية</button>
         <span class="spacer"></span>
         <span class="muted" style="font-size:12px">${num(data.total)} طلب · صفحة ${data.page}/${data.pages}</span>
@@ -1008,7 +1030,7 @@
         <table class="admin-table">
           <thead><tr><th>المرجع</th><th>النوع</th><th>العميل</th><th>الملخص</th><th>الحالة</th><th>الفرع / القسم</th><th>العرض</th><th>الموظف</th><th>التاريخ</th></tr></thead>
           <tbody>${data.requests.length ? data.requests.map((r) => `<tr data-request="${r.id}">
-            <td class="ref">${esc(r.reference)}</td>
+            <td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td>
             <td>${esc(data.types[r.type]?.label || r.type)}</td>
             <td>${esc(r.customer || '—')}<br><small class="muted" dir="ltr">${esc(r.phone || '')}</small></td>
             <td style="max-width:280px">${esc(r.summary || '')}</td>
@@ -1096,11 +1118,11 @@
       <hr>
       ${canWriteRequests ? `<h3>توزيع الطلب تنظيميًا</h3>
       <div class="form-grid">
-        <div class="field"><label>الفرع</label><select id="dBranch"><option value="">غير محدد</option>
+        <div class="field"><label for="dBranch">الفرع</label><select id="dBranch"><option value="">غير محدد</option>
           ${data.branches.map((branch) => `<option value="${branch.id}" ${r.branch_id === branch.id ? 'selected' : ''}>${esc(branch.name)}</option>`).join('')}</select></div>
-        <div class="field"><label>القسم</label><select id="dDepartment"><option value="">غير محدد</option>
+        <div class="field"><label for="dDepartment">القسم</label><select id="dDepartment"><option value="">غير محدد</option>
           ${data.departments.map((department) => `<option value="${department.id}" ${r.department_id === department.id ? 'selected' : ''}>${esc(department.name)}</option>`).join('')}</select></div>
-        <div class="field"><label>مصدر العميل</label><select id="dLeadOrigin">
+        <div class="field"><label for="dLeadOrigin">مصدر العميل</label><select id="dLeadOrigin">
           ${[['website','الموقع الإلكتروني'],['whatsapp','واتساب'],['phone','اتصال هاتفي'],['email','البريد الإلكتروني'],['branch','زيارة الفرع'],['referral','إحالة'],['other','أخرى']].map(([value,label]) => `<option value="${value}" ${(r.lead_origin || 'website') === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select></div>
       </div>
@@ -1108,23 +1130,23 @@
       <hr>` : ''}
       ${canWriteRequests ? `<h3>مسؤوليات الصفقة</h3>
       <div class="form-grid">
-        <div class="field"><label>مسؤول المبيعات</label><select id="dSalesOwner">${ownerOptions(branchAgents, r.sales_owner_id)}</select></div>
-        <div class="field"><label>مسؤول الخدمة</label><select id="dServiceOwner">${ownerOptions(departmentAgents, r.service_owner_id)}</select></div>
-        <div class="field"><label>مسؤول التنفيذ</label><select id="dExecutionOwner">${ownerOptions(departmentAgents, r.execution_owner_id)}</select></div>
+        <div class="field"><label for="dSalesOwner">مسؤول المبيعات</label><select id="dSalesOwner">${ownerOptions(branchAgents, r.sales_owner_id)}</select></div>
+        <div class="field"><label for="dServiceOwner">مسؤول الخدمة</label><select id="dServiceOwner">${ownerOptions(departmentAgents, r.service_owner_id)}</select></div>
+        <div class="field"><label for="dExecutionOwner">مسؤول التنفيذ</label><select id="dExecutionOwner">${ownerOptions(departmentAgents, r.execution_owner_id)}</select></div>
       </div>
       <button class="btn btn-ghost btn-sm mt-2" data-save-owners>حفظ المسؤوليات</button>
       <hr>` : ''}
       ${canWriteRequests ? `
       <h3>تحديث الحالة</h3>
       <div class="form-grid">
-        <div class="field"><label>الحالة الجديدة</label>
+        <div class="field"><label for="dStatus">الحالة الجديدة</label>
           <select id="dStatus">${data.nextStatuses.map((s) => `<option value="${s}">${esc(statuses[s]?.label || s)}</option>`).join('') || '<option value="">لا يوجد انتقال متاح</option>'}</select>
         </div>
-        <div class="field"><label>إسناد إلى</label>
+        <div class="field"><label for="dAgent">إسناد إلى</label>
           <select id="dAgent"><option value="">بدون إسناد</option>${data.agents.map((a) => `<option value="${a.id}" ${r.assigned_to === a.id ? 'selected' : ''}>${esc(a.name)}${a.department ? ` — ${esc(a.department)}` : ''}</option>`).join('')}</select>
         </div>
-        <div class="field"><label>قيمة عرض السعر (د.أ)</label><input id="dQuote" type="number" min="0" step="1" value="${r.quote_amount ?? ''}"></div>
-        <div class="field"><label>ملاحظة العرض</label><input id="dQuoteNote" value="${esc(r.quote_note || '')}" placeholder="مثال: شامل الطيران والتأشيرة"></div>
+        <div class="field"><label for="dQuote">قيمة عرض السعر (د.أ)</label><input id="dQuote" type="number" min="0" step="1" value="${r.quote_amount ?? ''}"></div>
+        <div class="field"><label for="dQuoteNote">ملاحظة العرض</label><input id="dQuoteNote" value="${esc(r.quote_note || '')}" placeholder="مثال: شامل الطيران والتأشيرة"></div>
       </div>
       <div class="btn-row mt-2"><button class="btn btn-primary btn-sm" data-save-status ${data.nextStatuses.length ? '' : 'disabled'}>حفظ الحالة</button><button class="btn btn-ghost btn-sm" data-save-quote>حفظ العرض</button><button class="btn btn-ghost btn-sm" data-save-assign>حفظ الإسناد</button></div>
       <hr>` : ''}
@@ -1132,10 +1154,10 @@
       <h3>تحويل الطلب إلى قسم آخر</h3>
       <p class="field-hint">تبقى الملكية الحالية حتى يقبل القسم المستلم التحويل.</p>
       <div class="form-grid">
-        <div class="field"><label>القسم المستلم</label><select id="dTransferDepartment"><option value="">اختر القسم</option>
+        <div class="field"><label for="dTransferDepartment">القسم المستلم</label><select id="dTransferDepartment"><option value="">اختر القسم</option>
           ${data.departments.map((department) => `<option value="${department.id}">${esc(department.name)}</option>`).join('')}</select></div>
-        <div class="field"><label>الموظف المستلم (اختياري)</label><select id="dTransferUser"><option value="">القسم بالكامل</option></select></div>
-        <div class="field field-full"><label>سبب التحويل</label><input id="dTransferNote" maxlength="1000"></div>
+        <div class="field"><label for="dTransferUser">الموظف المستلم (اختياري)</label><select id="dTransferUser"><option value="">القسم بالكامل</option></select></div>
+        <div class="field field-full"><label for="dTransferNote">سبب التحويل</label><input id="dTransferNote" maxlength="1000"></div>
       </div>
       <button class="btn btn-ghost btn-sm mt-2" data-create-transfer>إرسال طلب التحويل</button>` : ''}
       ${data.transfers.length ? `<h3 class="mt-3">سجل التحويلات</h3><ul class="timeline">${data.transfers.map((transfer) => `<li>
@@ -1229,14 +1251,14 @@
     const data = await api(`/api/admin/customers${state.query.cq ? `?q=${encodeURIComponent(state.query.cq)}` : ''}`);
     $('#view').innerHTML = `
       <div class="toolbar">
-        <input id="cSearch" placeholder="بحث بالاسم أو الهاتف أو البريد" value="${esc(state.query.cq || '')}">
+        <input id="cSearch" aria-label="بحث العملاء" placeholder="بحث بالاسم أو الهاتف أو البريد" value="${esc(state.query.cq || '')}">
         <button class="btn btn-ghost btn-sm" data-csearch>بحث</button>
         <span class="spacer"></span><span class="muted" style="font-size:12px">${num(data.customers.length)} عميل</span>
       </div>
       <div class="admin-card"><div class="admin-card-body" style="padding:0">
         <table class="admin-table"><thead><tr><th>الاسم</th><th>الهاتف</th><th>البريد</th><th>الطلبات</th><th>آخر طلب</th><th>ملاحظات</th></tr></thead>
         <tbody>${data.customers.length ? data.customers.map((c) => `<tr data-customer="${c.id}">
-          <td>${esc(c.name)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email || '—')}</td>
+          <td><button type="button" class="table-action">${esc(c.name || "فتح ملف العميل")}</button></td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email || '—')}</td>
           <td>${num(c.n)}</td><td>${day(c.last_request)}</td><td class="muted" style="max-width:220px">${esc(c.notes || '')}</td>
         </tr>`).join('') : '<tr><td colspan="6" class="muted">لا يوجد عملاء بعد.</td></tr>'}</tbody></table>
       </div></div>`;
@@ -1250,12 +1272,12 @@
     openDrawer(`
       <div class="drawer-head"><div><h2>${esc(c.name)}</h2><div class="ref" dir="ltr">${esc(c.phone)}</div></div><button class="drawer-close" data-close-drawer>×</button></div>
       <dl class="kv"><dt>البريد</dt><dd dir="ltr">${esc(c.email || '—')}</dd><dt>الدولة</dt><dd>${esc(c.country || '—')}</dd><dt>الموافقة</dt><dd>${c.consent ? 'نعم' : 'لا'}</dd><dt>أول تواصل</dt><dd>${dt(c.created_at)}</dd></dl>
-      <div class="field"><label>ملاحظات الموظف</label><textarea id="cNotes" rows="4">${esc(c.notes || '')}</textarea></div>
-      <div class="field mt-2"><label>تفضيلات العميل</label><input id="cPref" value="${esc(c.preference || '')}" placeholder="مثال: يفضل فنادق قريبة من الحرم"></div>
+      <div class="field"><label for="cNotes">ملاحظات الموظف</label><textarea id="cNotes" rows="4">${esc(c.notes || '')}</textarea></div>
+      <div class="field mt-2"><label for="cPref">تفضيلات العميل</label><input id="cPref" value="${esc(c.preference || '')}" placeholder="مثال: يفضل فنادق قريبة من الحرم"></div>
       <button class="btn btn-primary btn-sm mt-2" data-save-customer>حفظ</button>
       <hr><h3>الطلبات</h3>
       <table class="admin-table"><thead><tr><th>المرجع</th><th>النوع</th><th>الحالة</th><th>الملخص</th></tr></thead>
-      <tbody>${data.requests.map((r) => `<tr data-request="${r.id}"><td class="ref">${esc(r.reference)}</td><td>${esc(TYPE_LABELS[r.type] || r.type)}</td><td>${esc(STATUS_LABELS[r.status] || r.status)}</td><td>${esc(r.summary || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا طلبات</td></tr>'}</tbody></table>
+      <tbody>${data.requests.map((r) => `<tr data-request="${r.id}"><td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td><td>${esc(TYPE_LABELS[r.type] || r.type)}</td><td>${esc(STATUS_LABELS[r.status] || r.status)}</td><td>${esc(r.summary || '')}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">لا طلبات</td></tr>'}</tbody></table>
     `);
     $('[data-save-customer]')?.addEventListener('click', async () => {
       try {
@@ -1658,6 +1680,7 @@
       "reports:read": "التقارير",
       "reports:finance": "التقارير المالية والتكاليف",
       "reports:targets": "إدارة أهداف الأداء",
+      "system:health": "صحة النظام — إدارة المؤسسة فقط",
       "requests:assign": "إسناد الطلبات",
       "requests:transfer": "تحويل الطلبات",
       "requests:approve": "اعتماد التأكيد",
@@ -1977,27 +2000,37 @@
 
   /* ---------------- drawer ---------------- */
   function openDrawer(html) {
+    const previous = document.activeElement;
     closeDrawer();
-    const wrap = document.createElement('div');
+    const wrap = document.createElement('dialog');
     wrap.className = 'drawer-backdrop';
-    wrap.innerHTML = `<div class="drawer" role="dialog" aria-modal="true">${html}</div>`;
+    wrap.innerHTML = `<div class="drawer">${html}</div>`;
+    const heading = $('h2',wrap) || $('h1',wrap);
+    if(heading) { heading.id='staffDrawerTitle'; heading.tabIndex=-1; wrap.setAttribute('aria-labelledby',heading.id); }
+    else { wrap.setAttribute('aria-label','تفاصيل وإجراءات'); $('.drawer',wrap).tabIndex=-1; }
+    $$('[data-close-drawer]',wrap).forEach(b=>{if(!b.getAttribute('aria-label')&&b.textContent.trim()==='×')b.setAttribute('aria-label','إغلاق');});
+    wrap.previousFocus=previous;
+    wrap.previousOverflow=document.body.style.overflow;
     document.body.append(wrap);
     state.overlay = wrap;
+    document.body.style.overflow='hidden';
+    wrap.showModal();
+    (heading || $('.drawer',wrap)).focus({preventScroll:true});
     wrap.addEventListener('click', (e) => {
       if (e.target === wrap || e.target.closest('[data-close-drawer]')) closeDrawer();
     });
-    document.addEventListener('keydown', escClose);
-  }
-
-  function escClose(e) {
-    if (e.key === 'Escape') closeDrawer();
+    wrap.addEventListener('cancel',e=>{e.preventDefault();closeDrawer();});
   }
 
   function closeDrawer() {
     if (state.overlay) {
-      state.overlay.remove();
+      const wrap=state.overlay;
+      wrap.close();
+      wrap.remove();
+      document.body.style.overflow=wrap.previousOverflow;
       state.overlay = null;
-      document.removeEventListener('keydown', escClose);
+      const destination=wrap.previousFocus?.isConnected?wrap.previousFocus:$('#pageTitle');
+      destination?.focus({preventScroll:true});
     }
   }
 
