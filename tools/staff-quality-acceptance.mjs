@@ -46,7 +46,8 @@ async function scan(page,name){
   const r=await page.evaluate(async()=>({version:axe.version,...await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa']}})}));
   metrics.axeVersion=r.version;
   const failures=r.violations.map(v=>({id:v.id,impact:v.impact,description:v.description,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}));
-  metrics.scans.push({name,violations:failures.length,passes:r.passes.length,incomplete:r.incomplete.length});
+  metrics.scans.push({name,violations:failures.length,passes:r.passes.length,incomplete:r.incomplete.length,
+    incompleteRules:r.incomplete.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))});
   if(failures.length)violations.push({name,violations:failures});
 }
 async function section(page,id,ready){
@@ -108,6 +109,7 @@ try{
   await section(page,'systemHealth','[data-health-refresh]');await scan(page,'system-health');
   assert.ok((await page.locator('#view').innerText()).includes('لا دليل هنا على نسخة دورية'));
   const health=await page.request.get(base+'/api/admin/system-health');assert.equal(health.status(),200);assert.equal((await health.json()).database.schemaVersion,8);metrics.health=true;
+  await page.waitForFunction(()=>!document.querySelector('#toastStack')?.children.length,undefined,{timeout:8000});
   await page.screenshot({path:join(out,'system-health-desktop.png'),fullPage:true});
   const transitions=[];
   for(let i=0;i<3;i++){const t=Date.now();await section(page,'reports','[data-rp-filters]');transitions.push(Date.now()-t);await section(page,'systemHealth','[data-health-refresh]');}
