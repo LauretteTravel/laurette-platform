@@ -1656,6 +1656,8 @@
       "kb:write": "قاعدة المعرفة",
       "audit:read": "سجل العمليات",
       "reports:read": "التقارير",
+      "reports:finance": "التقارير المالية والتكاليف",
+      "reports:targets": "إدارة أهداف الأداء",
       "requests:assign": "إسناد الطلبات",
       "requests:transfer": "تحويل الطلبات",
       "requests:approve": "اعتماد التأكيد",
@@ -1833,71 +1835,8 @@
   }
 
   /* ---------------- performance reports ---------------- */
-  async function renderReports() {
-    state.report = state.report || { period: 'weekly', from: '', to: '', employee: '' };
-    const opts = state.report;
-    const params = new URLSearchParams({ period: opts.period });
-    if (opts.from && opts.to) { params.set('from', opts.from); params.set('to', opts.to); }
-    if (opts.employee) params.set('employee', opts.employee);
-    const data = await api(`/api/admin/reports?${params.toString()}`);
-    const s = data.summary;
-    const max = Math.max(1, ...data.series.map((x) => x.total));
-    const chart = data.series.map((x) => `<div class="chart-col" title="${esc(x.bucket)} — ${x.total} طلب / ${x.won} صفقة">
-      <i style="height:${Math.round((x.total / max) * 100)}%"></i>
-      <b style="height:${Math.round((x.won / max) * 100)}%"></b>
-      <span>${esc(x.bucket.slice(5))}</span></div>`).join('');
-    const employeeOptions = (data.agents || []).map((a) => `<option value="${a.id}" ${String(opts.employee) === String(a.id) ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+  async function renderReports() { await window.PerformanceReports.mount($('#view'),{api,hasPermission}); }
 
-    $('#view').innerHTML = `
-      <div class="toolbar">
-        <div class="tabs" style="margin:0;border:0">
-          ${[['daily', 'يومي'], ['weekly', 'أسبوعي'], ['monthly', 'شهري']].map(([k, l]) => `<button type="button" data-period="${k}" class="${opts.period === k ? 'is-active' : ''}">${l}</button>`).join('')}
-        </div>
-        <input type="date" id="rFrom" value="${esc(data.range.from)}" aria-label="من">
-        <input type="date" id="rTo" value="${esc(data.range.to)}" aria-label="إلى">
-        <select id="rEmployee" aria-label="الموظف"><option value="">كل الموظفين</option><option value="unassigned" ${opts.employee === 'unassigned' ? 'selected' : ''}>غير مسند</option>${employeeOptions}</select>
-        <button class="btn btn-primary btn-sm" type="button" data-report-apply>تطبيق</button>
-        <a class="btn btn-ghost btn-sm" href="/api/admin/reports.csv?period=${encodeURIComponent(opts.period)}&from=${encodeURIComponent(data.range.from)}&to=${encodeURIComponent(data.range.to)}">تصدير CSV</a>
-        <span class="spacer"></span><span class="muted" style="font-size:12px">${esc(data.range.from)} ← ${esc(data.range.to)}</span>
-      </div>
-
-      <div class="stat-grid">
-        <div class="stat"><span>إجمالي الطلبات</span><b>${num(s.total)}</b><small>خلال الفترة المحددة</small></div>
-        <div class="stat"><span>صفقات ناجحة</span><b>${num(s.won)}</b><small>ملغية: ${num(s.lost)} · مفتوحة: ${num(s.open)}</small></div>
-        <div class="stat"><span>نسبة التحويل</span><b>${s.conversion}%</b><small>معدل الفوز: ${s.winRate}%</small></div>
-        <div class="stat"><span>متوسط زمن الإنجاز</span><b>${esc(s.avgCompletionLabel)}</b><small>أول استجابة: ${esc(s.avgResponseLabel)}</small></div>
-        <div class="stat"><span>قيمة الصفقات الناجحة</span><b>${num(s.revenue)}</b><small>د.أ (من عروض الأسعار)</small></div>
-      </div>
-
-      <div class="admin-card mb-3">
-        <div class="admin-card-head"><h2>حركة الطلبات والصفقات</h2><span class="spacer" style="flex:1"></span><span class="chart-legend"><i></i> طلبات <b></b> صفقات</span></div>
-        <div class="admin-card-body"><div class="chart">${chart || '<p class="muted">لا توجد بيانات في هذه الفترة.</p>'}</div></div>
-      </div>
-
-      <div class="admin-card mb-3">
-        <div class="admin-card-head"><h2>أداء الموظفين</h2></div>
-        <div class="admin-card-body" style="padding:0">
-          <table class="admin-table"><thead><tr><th>الموظف</th><th>الطلبات</th><th>ناجحة</th><th>ملغية</th><th>التحويل</th><th>متوسط الإنجاز</th><th>أول استجابة</th><th>القيمة</th></tr></thead>
-          <tbody>${data.employees.length ? data.employees.map((e) => `<tr><td><b>${esc(e.name)}</b></td><td>${num(e.total)}</td><td>${num(e.won)}</td><td>${num(e.lost)}</td><td>${e.conversion}%</td><td>${esc(e.avgCompletionLabel)}</td><td>${esc(e.avgResponseLabel)}</td><td>${num(e.revenue)}</td></tr>`).join('') : '<tr><td colspan="8" class="muted">لا توجد طلبات في هذه الفترة.</td></tr>'}</tbody></table>
-        </div>
-      </div>
-
-      <div class="split-even grid">
-        <div class="admin-card"><div class="admin-card-head"><h2>التحويل حسب الخدمة</h2></div><div class="admin-card-body" style="padding:0">
-          <table class="admin-table"><thead><tr><th>الخدمة</th><th>الطلبات</th><th>ناجحة</th><th>التحويل</th></tr></thead><tbody>
-          ${data.byType.length ? data.byType.map((t) => `<tr><td>${esc(t.label)}</td><td>${num(t.total)}</td><td>${num(t.won)}</td><td>${t.conversion}%</td></tr>`).join('') : '<tr><td colspan="4" class="muted">لا بيانات</td></tr>'}
-          </tbody></table></div></div>
-        <div class="admin-card"><div class="admin-card-head"><h2>قمع الحالات</h2></div><div class="admin-card-body">
-          ${data.funnel.map((f) => `<div class="funnel-row"><span>${esc(f.label)}</span><div class="funnel-bar"><i style="width:${s.total ? Math.round((f.total / s.total) * 100) : 0}%"></i></div><b>${num(f.total)}</b></div>`).join('')}
-        </div></div>
-      </div>`;
-
-    $$('[data-period]').forEach((b) => b.addEventListener('click', () => { state.report = { ...opts, period: b.dataset.period, from: '', to: '' }; renderReports(); }));
-    $('[data-report-apply]')?.addEventListener('click', () => {
-      state.report = { ...opts, from: $('#rFrom').value, to: $('#rTo').value, employee: $('#rEmployee').value };
-      renderReports();
-    });
-  }
 
   /* ---------------- marketing & tracking ---------------- */
   async function renderMarketing() {
