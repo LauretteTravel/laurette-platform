@@ -1,3 +1,4 @@
+import * as VOUCHERS from './lib/vouchers.js';
 import * as DEADLINES from './lib/deadlines.js';
 import * as ATTACHMENTS from './lib/task-attachments.js';
 import * as TASKS from './lib/tasks-api.js';
@@ -275,6 +276,14 @@ export function createApp(options = {}) {
   router.get('/api/admin/notifications', api(TASKS.notifications,{action:'tasks:read'}));
   router.post('/api/admin/notifications/:id/read', api(TASKS.readNotification,{action:'tasks:read'}));
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
+  router.get('/api/admin/vouchers',api(VOUCHERS.listVouchers,{action:'vouchers:read'}));
+  router.post('/api/admin/vouchers',api(VOUCHERS.createVoucher,{action:'vouchers:write'}));
+  router.get('/api/admin/vouchers/:id',api(VOUCHERS.getVoucher,{action:'vouchers:read'}));
+  router.patch('/api/admin/vouchers/:id',api(VOUCHERS.saveVoucher,{action:'vouchers:write'}));
+  router.post('/api/admin/vouchers/:id/revisions',api(VOUCHERS.startRevision,{action:'vouchers:write'}));
+  router.post('/api/admin/vouchers/:id/issue',api(VOUCHERS.issueVoucher,{action:'vouchers:issue'}));
+  router.post('/api/admin/vouchers/:id/cancel',api(VOUCHERS.cancelVoucher,{action:'vouchers:cancel'}));
+  router.get('/api/admin/vouchers/:id/versions/:version/document',api(VOUCHERS.getVersion,{action:'vouchers:export'}));
   router.get('/api/admin/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
   router.get('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.listFollowUps, { action: 'requests:read' }));
   router.post('/api/admin/requests/:id/follow-ups', api(FOLLOW_UPS.createFollowUp, { action: 'requests:write' }));
@@ -647,6 +656,7 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/app.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/voucher.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/voucher-studio.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/voucher-ledger.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -657,6 +667,7 @@ function adminShell(ctx) {
 <script src="/assets/js/admin.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-generator.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-studio.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/voucher-ledger.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }

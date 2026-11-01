@@ -173,6 +173,7 @@
     { id: 'followups', label: 'متابعاتي', icon: '◷', permission: 'requests:read' },
     { id: 'requests', label: 'صندوق الطلبات', icon: '✉', permission: 'requests:read' },
     { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
+    {id:'voucherArchive',label:'القسائم المؤرشفة',icon:'▣',permission:'vouchers:read'},
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
     { id: 'programs', label: 'البرامج', icon: '✈', permission: 'programs:read' },
@@ -336,6 +337,7 @@
       overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
+      voucherArchive: () => window.VoucherLedger.mount(view,{api,hasPermission}),
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
       reports: renderReports, marketing: renderMarketing,
     };
