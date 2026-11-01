@@ -103,6 +103,7 @@ try {
     .locator("[data-field=title]")
     .fill("برنامج مصطنع للمراجعة — إسطنبول");
   await page.locator("[data-slug]").fill("synthetic-program-browser");
+  await page.locator("[data-field=category]").selectOption("istanbul");
   await page
     .locator("[data-field=destination]")
     .fill("إسطنبول — بيانات مصطنعة");

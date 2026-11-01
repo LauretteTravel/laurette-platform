@@ -7,6 +7,7 @@ import { syntheticPdf, docx } from "./helpers/program-documents.mjs";
 import { createApp } from "../server.js";
 import { hashPassword, createSession } from "../lib/auth.js";
 import { openDb } from "../lib/db.js";
+import { adoptProgramCatalog } from "../lib/programs.js";
 import { programData, ammanToday } from "../lib/program-data.js";
 import {
   sourceAnalysis,
@@ -224,6 +225,26 @@ test("4 legacy catalogue stays intact and fresh seeds acquire private workspaces
   assert.deepEqual(
     db.prepare("SELECT * FROM programs WHERE id=?").get(legacy.id),
     legacy,
+  );
+  const draftId = Number(
+    db
+      .prepare(
+        "INSERT INTO programs(slug,title,category,status,created_at,updated_at) VALUES('synthetic-legacy-draft','مسودة قديمة مصطنعة','istanbul','draft',?,?)",
+      )
+      .run(now(), now()).lastInsertRowid,
+  );
+  adoptProgramCatalog(db);
+  assert.equal(
+    (await detail("legacy-" + draftId, org)).workspace.state,
+    "draft",
+  );
+  assert.equal(
+    (await call("/api/programs/synthetic-legacy-draft", { user: null })).status,
+    404,
+  );
+  assert.equal(
+    (await call("/programs/synthetic-legacy-draft", { user: null })).status,
+    404,
   );
 });
 test("4 drafts and review never update the public row; explicit approval and publish atomically materialize only safe public fields", async () => {
@@ -459,6 +480,7 @@ test("4 date, currency, occupancy, price precision and typed lists reject ambigu
     (d) => (d.pricing[0].occupancy = ""),
     (d) => (d.pricing[0].currency = "$"),
     (d) => (d.pricing[0].sale = -1),
+    (d) => (d.pricing[0].sale = 0),
     (d) => (d.pricing[0].sale = 1.1234),
     (d) => (d.valid_until = "2027-02-30"),
     (d) => (d.travel_end = "2000-01-01"),

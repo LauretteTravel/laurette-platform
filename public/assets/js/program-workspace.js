@@ -57,6 +57,21 @@ window.ProgramWorkspace = {
       pricing: "تفاصيل التسعير",
       public_status: "حالة المقاعد",
     };
+    const eventLabel = {
+      created: "إنشاء",
+      saved: "حفظ مسودة",
+      submitted: "إرسال للمراجعة",
+      approved: "اعتماد",
+      published: "نشر",
+      archived: "أرشفة",
+      "source-added": "إضافة مصدر",
+    };
+    const timeLabel = (value) =>
+      new Intl.DateTimeFormat("ar-JO", {
+        timeZone: "Asia/Amman",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(value));
     const checks = {
       source: "راجعت المصادر والمقارنة مع العرض الحالي",
       prices: "راجعت أسعار البيع والتكلفة",
@@ -206,7 +221,7 @@ window.ProgramWorkspace = {
       current = r?.workspace || {
         data: {
           title: "",
-          category: meta.categories.find((c) => c.active)?.key || "",
+          category: "",
           pricing: [],
           display_price: 0,
           art_key: "haram",
@@ -258,9 +273,12 @@ window.ProgramWorkspace = {
         }
       }
       root.innerHTML = `<div class="pw-header"><div><h2>${esc(d.title || "برنامج جديد")}</h2><span class="pw-badge">${stateLabel[w.state]}</span> ${w.revision ? `<span class="pw-muted">مراجعة ${w.revision} · اعتماد ${w.approved_version}</span>` : ""}</div>${button("العودة للقائمة", "data-back")}</div><div class="pw-grid"><div><form data-editor><fieldset ${write ? "" : "disabled"} style="border:0;padding:0;margin:0"><section class="pw-panel"><h3>بيانات البرنامج</h3><div class="pw-fields">${field("title", d.title, { full: true })}<label>الرابط (ثابت)<input data-slug value="${esc(w.slug || "")}" dir="ltr" ${w.id ? "disabled" : ""} placeholder="amman-summer-2027"></label><label>التصنيف<select data-field="category">${opts(
-        meta.categories
-          .filter((c) => c.active || c.key === d.category)
-          .map((c) => [c.key, c.name + (c.active ? "" : " — موقوف")]),
+        [
+          ["", "اختر تصنيفًا"],
+          ...meta.categories
+            .filter((c) => c.active || c.key === d.category)
+            .map((c) => [c.key, c.name + (c.active ? "" : " — موقوف")]),
+        ],
         d.category,
       )}</select></label>${["destination", "country", "days", "nights", "summary"].map((k) => field(k, d[k], { type: ["days", "nights"].includes(k) ? "number" : "text", full: k === "summary" })).join("")}<label>الفرع<select data-unit="branchId">${opts([["", "اختر الفرع"], ...meta.branches.map((c) => [c.id, c.name])], w.branch_id)}</select></label><label>القسم<select data-unit="departmentId">${opts([["", "دون قسم"], ...meta.departments.map((c) => [c.id, c.name])], w.department_id)}</select></label><label>المسؤول<select data-unit="ownerId">${opts([["", "اختر الموظف"], ...meta.owners.map((c) => [c.id, c.name])], w.owner_id)}</select></label><label>حالة المقاعد<select data-field="public_status">${opts(
         [
@@ -285,7 +303,7 @@ window.ProgramWorkspace = {
               `<tr><th>${labels[k]}</th><td>${esc(display(before[k]))}</td><td>${esc(display(d[k]))}</td></tr>`,
           )
           .join("") || '<tr><td colspan="3">لا تغييرات ظاهرة.</td></tr>'
-      }</tbody></table></details><section class="pw-panel"><h3>الإصدارات وسجل العمليات</h3><div class="pw-actions">${(r?.versions || []).map((v) => button(`اعتماد ${v.version}`, `data-version="${v.version}"`)).join("")}</div><div data-version-view></div><div class="pw-history">${(r?.events || []).map((e) => `<p><b>${esc(e.actor)}</b> · ${esc(e.kind)} · ${esc(e.created_at.slice(0, 16))}<br>${esc(e.reason)}</p>`).join("") || '<p class="pw-muted">لم تُسجّل عمليات بعد.</p>'}</div></section></aside></div>`;
+      }</tbody></table></details><section class="pw-panel"><h3>الإصدارات وسجل العمليات</h3><div class="pw-actions">${(r?.versions || []).map((v) => button(`اعتماد ${v.version}`, `data-version="${v.version}"`)).join("")}</div><div data-version-view></div><div class="pw-history">${(r?.events || []).map((e) => `<p><b>${esc(e.actor)}</b> · ${esc(eventLabel[e.kind] || e.kind)} · ${esc(timeLabel(e.created_at))}<br>${esc(e.reason)}</p>`).join("") || '<p class="pw-muted">لم تُسجّل عمليات بعد.</p>'}</div></section></aside></div>`;
       root.querySelector("[data-back]").onclick = () => {
         if (!dirty || confirm("هناك تعديلات غير محفوظة. العودة دون حفظ؟"))
           list().catch((e) => message(e.message));

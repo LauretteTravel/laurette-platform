@@ -163,12 +163,15 @@ try {
       "EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
     ].join(""),
   );
-  const infected = Buffer.concat([
-    Buffer.from("%PDF-1.4\n"),
-    marker,
-    Buffer.from("\n%%EOF"),
-  ]);
-  r = await upload("benign-av-test.pdf", infected);
+  // EICAR requires a complete 68-byte file, not a string prefixed with PDF bytes.
+  // Place that exact in-memory file in the supported DOCX ZIP container.
+  assert.equal(marker.length, 68);
+  const infected = docx({
+    "word/document.xml":
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Synthetic scanner test only</w:t></w:r></w:p></w:body></w:document>',
+    "scanner-test.txt": marker,
+  });
+  r = await upload("benign-av-test.docx", infected);
   assert.equal(r.status, 422, r.text);
   assert.equal((await call(path)).data.sources.length, 3);
   console.log(
