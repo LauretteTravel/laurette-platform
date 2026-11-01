@@ -220,6 +220,15 @@ test("5 Amman half-open ranges, leap days, equal previous periods and historical
   assert.equal(dayStart("2026-10-31"), "2026-10-30T21:00:00.000Z");
   assert.equal(ammanDay("2026-10-30T21:00:00Z"), "2026-10-31");
   assert.equal(dayStart("2021-01-15"), "2021-01-14T22:00:00.000Z");
+  assert.equal(dayStart("2021-10-29"), "2021-10-28T21:00:00.000Z");
+  for (const day of ["2021-03-26", "2021-10-29", "2020-10-30", "2022-10-28"]) {
+    const start = dayStart(day);
+    assert.equal(ammanDay(start), day);
+    assert.notEqual(
+      ammanDay(new Date(Date.parse(start) - 1).toISOString()),
+      day,
+    );
+  }
   const r = reportRange({ from: "2024-02-28", to: "2024-03-01" });
   assert.equal(r.days, 3);
   assert.equal(r.previous.from, "2024-02-25");
@@ -275,6 +284,44 @@ test("5 cohort counts and comparisons include the local midnight edge exactly on
   assert.equal(r.data.finance.currencies.length, 0);
   assert.equal(r.data.finance.realizedProfit, null);
 });
+test("5 repeated historical midnight includes its first hour in requests, bookings, payments and target actuals", async () => {
+  const user = actor(),
+    source = "repeated-midnight-" + ++seq,
+    at = "2021-10-28T21:30:00Z",
+    r = request({ user, source, created: at, stage: "won" }),
+    b = booking(r, { at });
+  payment(b, 50, "JOD", "receipt", at);
+  const result = await call(
+    root + "?from=2021-10-29&to=2021-10-29&source=" + source,
+    { user },
+  );
+  assert.equal(result.status, 200, result.text);
+  assert.equal(result.data.summary.total, 1);
+  assert.equal(result.data.series[0].total, 1);
+  const j = result.data.finance.currencies.find((c) => c.currency === "JOD");
+  assert.equal(j.bookedAmount, 100);
+  assert.equal(j.netReceipts, 50);
+  const goal = await call("/api/admin/report-targets", {
+    user,
+    body: goalBody(user, {
+      from: "2021-10-29",
+      to: "2021-10-29",
+      metric: "net_receipts",
+      currency: "JOD",
+      value: 100,
+    }),
+  });
+  assert.equal(goal.status, 201, goal.text);
+  const targets = await call(
+    "/api/admin/report-targets?from=2021-10-29&to=2021-10-29",
+    { user },
+  );
+  assert.equal(
+    targets.data.items.find((g) => g.id === goal.data.id).actual,
+    50,
+  );
+});
+
 test("5 empty sets and invalid duration samples remain unavailable with explicit denominators", async () => {
   let r = await report("not-present");
   assert.equal(r.data.summary.total, 0);
