@@ -69,7 +69,7 @@ window.PerformanceReports = {
         )
         .join("");
     const table = (heads, rows) =>
-      `<div class="rp-scroll" tabindex="0" aria-label="جدول يمكن تمريره أفقيًا"><table class="${heads.length >= 5 ? "rp-wide" : ""}"><thead><tr>${heads.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map((row) => `<tr>${row.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${heads.length}">لا بيانات مطابقة ضمن نطاقك.</td></tr>`}</tbody></table></div>`;
+      `<div class="rp-scroll" role="group" tabindex="0" aria-label="جدول يمكن تمريره أفقيًا"><table class="${heads.length >= 5 ? "rp-wide" : ""}"><thead><tr>${heads.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map((row) => `<tr>${row.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${heads.length}">لا بيانات مطابقة ضمن نطاقك.</td></tr>`}</tbody></table></div>`;
     const btn = (label, attrs = "") =>
       `<button class="btn btn-ghost btn-sm" type="button" ${attrs}>${label}</button>`;
     let filters = { period: "weekly" },

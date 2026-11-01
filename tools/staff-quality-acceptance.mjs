@@ -49,6 +49,8 @@ async function scan(page,name){
   metrics.scans.push({name,violations:failures.length,passes:r.passes.length,incomplete:r.incomplete.length,
     incompleteRules:r.incomplete.map(v=>({id:v.id,nodes:v.nodes.map(n=>({target:n.target,summary:n.failureSummary}))}))});
   if(failures.length)violations.push({name,violations:failures});
+  const ariaReview=r.incomplete.filter(v=>v.id.startsWith('aria-'));
+  if(ariaReview.length)violations.push({name,incompleteAria:ariaReview.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))});
 }
 async function section(page,id,ready){
   await page.locator(`[data-section=${id}]`).click();
