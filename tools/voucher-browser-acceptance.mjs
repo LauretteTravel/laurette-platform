@@ -152,7 +152,10 @@ async function exportPdf(page, filename, { onePage = true } = {}) {
     join(out, filename),
     join(out, filename.replace(".pdf", "")),
   ]);
-  metrics.pdf.push({ filename, pages, bytes: bytes.length, durationMs });
+  const metric = { filename, pages, bytes: bytes.length, durationMs };
+  metrics.pdf.push(metric);
+  writeFileSync(join(out, "metrics.json"), JSON.stringify(metrics, null, 2));
+  console.log("PDF_EXPORT", JSON.stringify(metric));
 }
 try {
   const desktop = await context({ width: 1280, height: 900 }),
@@ -267,6 +270,7 @@ try {
     phone = await mobile.newPage();
   await login(phone);
   await phone.getByRole("button", { name: /LRT-HTL-/ }).click();
+  await phone.locator(".vl-editor").waitFor({ state: "visible" });
   const dimensions = await phone.evaluate(() => ({
     width: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,
