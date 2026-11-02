@@ -608,7 +608,7 @@ test("3 migration5 backup retains all old values and checksums, restores exactly
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let upgraded = openDb(file);
-  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 6);
+  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 7);
   const backup = upgraded.migrationBackups[5];
   raw = new DatabaseSync(backup, { readOnly: true });
   assert.equal(raw.prepare("PRAGMA user_version").get().user_version, 5);
@@ -654,8 +654,8 @@ test("3 migration5 backup retains all old values and checksums, restores exactly
     privateRoot: realpathSync("data/phase1b-testing"),
   });
   assert.equal(rehearsal.sourceVersion, 5);
-  assert.equal(rehearsal.candidateVersion, 6);
-  assert.equal(rehearsal.migrationSnapshots, 1);
+  assert.equal(rehearsal.candidateVersion, 7);
+  assert.equal(rehearsal.migrationSnapshots, 2);
   assert.equal(rehearsal.isolatedRestoreExact, true);
   const restored = file + ".restored";
   copyFileSync(backup, restored);
@@ -664,7 +664,7 @@ test("3 migration5 backup retains all old values and checksums, restores exactly
     createHash("sha256").update(readFileSync(backup)).digest("hex"),
   );
   upgraded = openDb(restored);
-  assert.equal(upgraded.migrationBackups.length, 1);
+  assert.equal(upgraded.migrationBackups.length, 2);
   assert.equal(upgraded.prepare("PRAGMA foreign_key_check").all().length, 0);
   upgraded.close();
   upgraded = openDb(restored);

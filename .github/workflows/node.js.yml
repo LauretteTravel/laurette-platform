@@ -36,6 +36,9 @@ jobs:
       - name: إصدار Node
         run: node --version
 
+      - name: Local source-extraction tools for synthetic PDF and DOCX tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3 poppler-utils util-linux
+
       - name: فحص الصياغة
         run: node --check server.js
 

@@ -134,6 +134,10 @@ async function api(
   const res = await fetch(base + path, {
     method,
     headers: {
+      // These authorization tests do not exercise connection pooling. The preceding
+      // synchronous batch can outlive an idle socket on slower Windows runners;
+      // give each request its own connection instead of retrying a lost request.
+      connection: "close",
       origin: origin || base,
       "content-type": "application/json",
       cookie: user.cookie,
@@ -456,7 +460,7 @@ test("2D migration4 snapshot restores ledger and alert deduplication survives da
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let d = openDb(file);
-  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 6);
+  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 7);
   const backup = d.migrationBackups[4];
   d.close();
   const restored = file + ".v4";
@@ -466,7 +470,7 @@ test("2D migration4 snapshot restores ledger and alert deduplication survives da
   const ledger = raw.prepare("SELECT * FROM schema_migrations").all();
   raw.close();
   d = openDb(restored);
-  assert.equal(d.migrationBackups.length, 2);
+  assert.equal(d.migrationBackups.length, 3);
   assert.deepEqual(
     d.prepare("SELECT * FROM schema_migrations WHERE version<5").all(),
     ledger,

@@ -636,39 +636,21 @@ test("الموظف يرى الطلبات ولا يستطيع إدارة البر
   assert.equal(users.res.status, 403);
 });
 
-test('المدير ينشئ ويعدّل ويحذف برنامجاً', async () => {
-  const created = await call('/api/admin/programs', {
-    method: 'POST', cookie: adminCookie,
-    body: {
-      title: 'برنامج اختبار مؤقت', slug: 'test-temp-program', category: 'umrah', days: 5, nights: 4, priceFrom: 500,
-      hotels: ['مكة المكرمة | فندق اختبار | 5 | 300 م'], itinerary: ['وصول', 'عمرة'], includes: ['طيران'], options: ['غرفة ثنائية | 520'],
-    },
-  });
-  assert.equal(created.res.status, 201);
-  const id = created.payload.id;
-  const row = app.db.prepare('SELECT * FROM programs WHERE id = ?').get(id);
-  assert.equal(row.status, 'published');
-  assert.equal(JSON.parse(row.hotels)[0].name, 'فندق اختبار');
-
-  const patched = await call(`/api/admin/programs/${id}`, { method: 'PATCH', cookie: adminCookie, body: { priceFrom: 480, status: 'draft' } });
-  assert.equal(patched.res.status, 200);
-  assert.equal(app.db.prepare('SELECT price_from FROM programs WHERE id = ?').get(id).price_from, 480);
-
-  const del = await call(`/api/admin/programs/${id}`, { method: 'DELETE', cookie: adminCookie });
-  assert.equal(del.res.status, 200);
-  assert.equal(app.db.prepare('SELECT COUNT(*) n FROM programs WHERE id = ?').get(id).n, 0);
+test('البرامج القديمة تمنع الكتابة والحذف المباشر وتحفظ العرض الحالي', async () => {
+  const before=app.db.prepare('SELECT * FROM programs ORDER BY id LIMIT 1').get();
+  for(const [path,method,body] of [['/api/admin/programs','POST',{title:'محاولة نشر مباشر',category:'umrah'}],[`/api/admin/programs/${before.id}`,'PATCH',{priceFrom:1,status:'published'}],[`/api/admin/programs/${before.id}`,'DELETE',undefined]]){
+    const result=await call(path,{method,cookie:adminCookie,body});assert.equal(result.res.status,409);
+  }
+  assert.deepEqual(app.db.prepare('SELECT * FROM programs WHERE id=?').get(before.id),before);
 });
 
-test('المحتوى المحقون يُهرَّب في HTML', async () => {
-  const created = await call('/api/admin/programs', {
-    method: 'POST', cookie: adminCookie,
-    body: { title: '<script>alert(1)</script>', slug: 'xss-check', category: 'istanbul' },
-  });
-  assert.equal(created.res.status, 201);
-  const page = await call('/programs/xss-check');
-  assert.equal(page.res.status, 200);
-  assert.ok(!page.payload.includes('<script>alert(1)</script>'), 'الحقن لم يُهرَّب');
-  assert.match(page.payload, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+test('المحتوى المخزن في البرامج يُهرب في HTML', async () => {
+  // A synthetic legacy row models untrusted content already in the database.
+  const at=new Date().toISOString();
+  app.db.prepare('INSERT INTO programs(slug,title,category,created_at,updated_at) VALUES(?,?,?,?,?)').run('xss-check','<script>alert(1)</script>','istanbul',at,at);
+  const page=await call('/programs/xss-check');assert.equal(page.res.status,200);
+  assert.ok(!page.payload.includes('<script>alert(1)</script>'));
+  assert.match(page.payload,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 });
 
 test('حماية CSRF: طلب من أصل مختلف أو بلا ترويسة يُرفض', async () => {

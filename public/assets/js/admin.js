@@ -1267,59 +1267,7 @@
   }
 
   /* ---------------- programs ---------------- */
-  const PROGRAM_FIELDS = [
-    { key: 'title', label: 'العنوان', full: true },
-    { key: 'slug', label: 'المعرّف في الرابط (slug)', hint: 'يُنشأ تلقائيًا إذا تُرك فارغًا' },
-    { key: 'category', label: 'القسم', type: 'select', options: [['umrah', 'الحج والعمرة'], ['cruise', 'رحلات الكروز'], ['sharm', 'شرم الشيخ'], ['istanbul', 'إسطنبول']] },
-    { key: 'level', label: 'المستوى', type: 'select', options: [['', 'غير محدد'], ['eco', 'اقتصادي'], ['3', 'ثلاث نجوم'], ['4', 'أربع نجوم'], ['5', 'خمس نجوم']] },
-    { key: 'status', label: 'الحالة', type: 'select', options: [['published', 'منشور'], ['draft', 'مسودة'], ['sold_out', 'نفدت المقاعد'], ['archived', 'مؤرشف']] },
-    { key: 'summary', label: 'ملخص قصير', full: true },
-    { key: 'days', label: 'الأيام', type: 'number' },
-    { key: 'nights', label: 'الليالي', type: 'number' },
-    { key: 'priceFrom', label: 'السعر يبدأ من', type: 'number' },
-    { key: 'artKey', label: 'الرسم', type: 'select', options: [['haram', 'الحرم'], ['madinah', 'المدينة'], ['istanbul', 'إسطنبول'], ['beach', 'شاطئ'], ['cruise', 'سفينة'], ['plane', 'طائرة'], ['hotel', 'فندق'], ['desert', 'صحراء'], ['cairo', 'القاهرة'], ['europe', 'أوروبا'], ['asia', 'آسيا'], ['gulf', 'الخليج']] },
-    { key: 'destination', label: 'الوجهة' },
-    { key: 'country', label: 'الدولة' },
-    { key: 'meals', label: 'الوجبات' },
-    { key: 'airline', label: 'شركة الطيران' },
-    { key: 'departureDates', label: 'مواعيد المغادرة', full: true },
-    { key: 'hotels', label: 'الفنادق', type: 'list', rows: 4, hint: 'سطر لكل فندق: المدينة | الاسم | النجوم | المسافة' },
-    { key: 'options', label: 'خيارات الأسعار', type: 'list', rows: 5, hint: 'سطر لكل خيار: الوصف | السعر' },
-    { key: 'itinerary', label: 'خط السير', type: 'list', rows: 6, hint: 'سطر لكل يوم بالترتيب' },
-    { key: 'includes', label: 'المشمول', type: 'list', rows: 5 },
-    { key: 'excludes', label: 'غير المشمول', type: 'list', rows: 5 },
-    { key: 'terms', label: 'الشروط', type: 'list', rows: 4 },
-    { key: 'flights', label: 'الرحلات الجوية', type: 'list', rows: 4 },
-    { key: 'badges', label: 'الشارات', type: 'list', rows: 2 },
-    { key: 'description', label: 'وصف داخلي', type: 'textarea', rows: 3 },
-  ];
-
-  async function renderPrograms() {
-    const data = await api('/api/admin/programs');
-    const items = data.items;
-    $('#view').innerHTML = `
-      <div class="toolbar">
-        <button class="btn btn-primary btn-sm" data-new-program>+ برنامج جديد</button>
-        <span class="spacer"></span>
-        <span class="muted" style="font-size:12px">${num(items.length)} برنامج</span>
-      </div>
-      <div class="admin-card"><div class="admin-card-body" style="padding:0">
-        <table class="admin-table"><thead><tr><th>العنوان</th><th>القسم</th><th>السعر</th><th>الحالة</th><th>مميز</th><th>تعديل</th></tr></thead>
-        <tbody>${items.map((p) => `<tr>
-          <td><b>${esc(p.title)}</b><br><small class="muted" dir="ltr">${esc(p.slug)}</small></td>
-          <td>${esc(p.category)}</td><td>${p.price_from ? `${num(p.price_from)} ${esc(p.currency)}` : '—'}</td>
-          <td><span class="badge ${p.status === 'published' ? 'badge-ok' : p.status === 'sold_out' ? 'badge-danger' : 'badge-line'}">${esc({ published: 'منشور', draft: 'مسودة', sold_out: 'نفدت', archived: 'مؤرشف' }[p.status] || p.status)}</span></td>
-          <td>${p.featured ? '★' : '—'}</td>
-          <td class="btn-row"><button class="btn btn-ghost btn-sm" data-edit-program="${p.id}">تعديل</button><button class="btn btn-danger btn-sm" data-del-program="${p.id}">حذف</button></td>
-        </tr>`).join('')}</tbody></table>
-      </div></div>`;
-    $('[data-new-program]')?.addEventListener('click', () => openProgramForm(null));
-    $$('[data-edit-program]').forEach((b) => b.addEventListener('click', () => openProgramForm(items.find((p) => p.id === Number(b.dataset.editProgram)))));
-    $$('[data-del-program]').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm('حذف أو أرشفة هذا البرنامج؟')) return;
-      try { const r = await api(`/api/admin/programs/${b.dataset.delProgram}`, { method: 'DELETE' }); toast(r.message || 'تم'); renderPrograms(); } catch (e) { toast(e.message, 'bad'); }
-    }));
-  }
+  async function renderPrograms() { await window.ProgramWorkspace.mount($('#view'),{api,hasPermission}); }
 
   function fieldControl(field, value) {
     const id = `ff-${field.key}`;
@@ -1329,46 +1277,6 @@
     if (field.type === 'textarea') return `<textarea id="${id}" data-key="${field.key}" rows="${field.rows || 4}">${esc(value ?? '')}</textarea>`;
     if (field.type === 'list') return `<textarea id="${id}" data-key="${field.key}" rows="${field.rows || 4}">${esc(Array.isArray(value) ? value.map((v) => (typeof v === 'object' ? (field.key === 'hotels' ? `${v.city} | ${v.name} | ${v.stars || 0} | ${v.distance || ''}` : `${v.label} | ${v.price}`) : v)).join('\n') : (value || ''))}</textarea>`;
     return `<input id="${id}" data-key="${field.key}" type="${field.type || 'text'}" value="${esc(value ?? '')}"${field.datalist ? ' list="mediaList"' : ''}>`;
-  }
-
-  function openProgramForm(program) {
-    const p = program || { category: 'umrah', status: 'published', artKey: 'haram', currency: 'د.أ' };
-    openDrawer(`
-      <div class="drawer-head"><div><h2>${program ? 'تعديل برنامج' : 'برنامج جديد'}</h2></div><button class="drawer-close" data-close-drawer>×</button></div>
-      <form id="programForm" class="stack">
-        <div class="form-grid">
-          ${PROGRAM_FIELDS.map((f) => `<div class="field ${f.full ? 'field-full' : ''}">
-            <label for="ff-${f.key}">${esc(f.label)}</label>
-            ${fieldControl(f, p[f.key])}
-            ${f.hint ? `<span class="field-hint">${esc(f.hint)}</span>` : ''}
-          </div>`).join('')}
-        </div>
-        <div class="check"><label class="check"><input type="checkbox" id="ff-featured" ${p.featured ? 'checked' : ''}> <span>برنامج مميز (يظهر في الرئيسية)</span></label></div>
-        <p class="form-status is-error" data-form-error></p>
-        <div class="btn-row"><button class="btn btn-primary" type="submit">حفظ</button><button class="btn btn-ghost" type="button" data-close-drawer>إلغاء</button></div>
-      </form>
-    `);
-    $('#programForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const body = {};
-      PROGRAM_FIELDS.forEach((f) => {
-        const el = $(`[data-key="${f.key}"]`);
-        if (!el) return;
-        if (f.type === 'list') body[f.key] = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
-        else if (f.type === 'number') body[f.key] = el.value === '' ? null : Number(el.value);
-        else body[f.key] = el.value.trim();
-      });
-      body.featured = $('#ff-featured').checked;
-      try {
-        if (program) await api(`/api/admin/programs/${program.id}`, { method: 'PATCH', body: JSON.stringify(body) });
-        else await api('/api/admin/programs', { method: 'POST', body: JSON.stringify(body) });
-        closeDrawer();
-        toast('تم الحفظ');
-        renderPrograms();
-      } catch (err) {
-        $('[data-form-error]').textContent = err.message;
-      }
-    });
   }
 
   /* ---------------- generic content resources ---------------- */
