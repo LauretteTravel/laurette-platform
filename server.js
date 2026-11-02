@@ -705,6 +705,7 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/program-workspace.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/reports.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/admin-polish.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/employee-workspace.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -719,6 +720,7 @@ function adminShell(ctx) {
 <script src="/assets/js/program-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/reports.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/system-health.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/employee-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }
