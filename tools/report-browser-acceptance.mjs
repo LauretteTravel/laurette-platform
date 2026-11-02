@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openStaffSection } from '../tests/helpers/staff-browser-navigation.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -201,7 +202,7 @@ async function context(viewport, who = owner) {
 async function reports(page) {
   page.on("pageerror", (e) => metrics.errors.push(e.message));
   await page.goto(base + "/admin");
-  await page.locator("[data-section=reports]").click();
+  await openStaffSection(page,'reports');
   await page.locator("[data-rp-filters]").waitFor({ state: "visible" });
 }
 try {

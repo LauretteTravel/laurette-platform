@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openStaffSection } from '../tests/helpers/staff-browser-navigation.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -97,7 +98,7 @@ try {
   page.on("pageerror", (e) => metrics.pageErrors.push(e.message));
   page.on("dialog", (d) => d.accept());
   await page.goto(base + "/admin");
-  await page.locator('[data-section="programs"]').click();
+  await openStaffSection(page,'programs');
   await page.locator("[data-new]").click();
   await page
     .locator("[data-field=title]")
@@ -225,7 +226,7 @@ try {
     phone = await mobile.newPage();
   phone.on("pageerror", (e) => metrics.pageErrors.push(e.message));
   await phone.goto(base + "/admin");
-  await phone.locator("[data-section=programs]").click();
+  await openStaffSection(phone,'programs');
   await phone.locator(`[data-open="${w.id}"]`).click();
   await phone.locator("[data-editor]").waitFor({ state: "visible" });
   const dimensions = await phone.evaluate(() => ({

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openStaffSection } from '../tests/helpers/staff-browser-navigation.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -53,7 +54,7 @@ async function scan(page,name){
   if(ariaReview.length)violations.push({name,incompleteAria:ariaReview.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)}))});
 }
 async function section(page,id,ready){
-  await page.locator(`[data-section=${id}]`).click();
+  await openStaffSection(page,id);
   await page.locator(ready).first().waitFor();
   await page.waitForFunction(()=>document.querySelector('#view')?.getAttribute('aria-busy')==='false');
 }
@@ -62,7 +63,7 @@ try{
   const anonymous=await context({width:1440,height:1000},{auth:false}),login=await anonymous.newPage();
   await login.goto(base+'/admin');await login.locator('#loginForm').waitFor();await scan(login,'login');
   const desktop=await context({width:1440,height:1000}),page=await desktop.newPage();
-  const start=Date.now();await page.goto(base+'/admin');await page.locator('[data-section=systemHealth]').waitFor();await page.waitForFunction(()=>document.querySelector('#view')?.getAttribute('aria-busy')==='false');await settled(page);
+  const start=Date.now();await page.goto(base+'/admin');await page.locator('[data-section=systemHealth]').waitFor({state:'attached'});await page.waitForFunction(()=>document.querySelector('#view')?.getAttribute('aria-busy')==='false');await settled(page);
   metrics.performance.coldReadyMs=Date.now()-start;
   metrics.performance.initial=await page.evaluate(()=>({lcpMs:window.__staffLcp,navigation:performance.getEntriesByType('navigation').map(n=>({ttfbMs:n.responseStart-n.requestStart,domContentLoadedMs:n.domContentLoadedEventEnd,loadMs:n.loadEventEnd}))[0],decodedResourceBytes:performance.getEntriesByType('resource').reduce((sum,r)=>sum+r.decodedBodySize,0),domNodes:document.querySelectorAll('*').length}));
   assert.ok(metrics.performance.coldReadyMs<7000,'Local synthetic cold ready budget: 7000ms');
@@ -92,7 +93,7 @@ try{
   await page.locator('[data-create-transfer]').click();assert.equal((await transferResponse).status(),201);
   const transfer=db.prepare('SELECT id,status FROM request_transfers WHERE request_id=? ORDER BY id DESC LIMIT 1').get(handedRequest);
   assert.equal(transfer.status,'pending');assert.equal(db.prepare('SELECT assigned_to FROM requests WHERE id=?').get(handedRequest).assigned_to,user);
-  const receiving=await context({width:1440,height:1000},{session:receiverToken}),rp=await receiving.newPage();await rp.goto(base+'/admin');await rp.locator('[data-section=requests]').waitFor();
+  const receiving=await context({width:1440,height:1000},{session:receiverToken}),rp=await receiving.newPage();await rp.goto(base+'/admin');await rp.locator('[data-section=requests]').first().waitFor();
   assert.equal(await rp.locator('[data-section=systemHealth]').count(),0);
   assert.equal((await rp.request.get(base+'/api/admin/system-health')).status(),403);
   assert.equal((await rp.request.get(base+`/api/admin/requests/${handedRequest}`)).status(),404);metrics.restrictedRole=true;
@@ -116,7 +117,7 @@ try{
   const transitions=[];
   for(let i=0;i<3;i++){const t=Date.now();await section(page,'reports','[data-rp-filters]');transitions.push(Date.now()-t);await section(page,'systemHealth','[data-health-refresh]');}
   metrics.performance.reportTransitionMs=transitions;assert.ok(Math.max(...transitions)<2500,'Report interaction readiness budget: 2500ms for 1500 synthetic requests');
-  const mobile=await context({width:390,height:844},{reducedMotion:'reduce'}),mp=await mobile.newPage();await mp.goto(base+'/admin');await mp.locator('[data-section=systemHealth]').waitFor();await section(mp,'systemHealth','[data-health-refresh]');await scan(mp,'mobile-health');
+  const mobile=await context({width:390,height:844},{reducedMotion:'reduce'}),mp=await mobile.newPage();await mp.goto(base+'/admin');await mp.locator('[data-section=systemHealth]').waitFor({state:'attached'});await section(mp,'systemHealth','[data-health-refresh]');await scan(mp,'mobile-health');
   metrics.mobileDimensions=await mp.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,columns:getComputedStyle(document.querySelector('.health-grid')).gridTemplateColumns.split(' ').length}));
   assert.equal(metrics.mobileDimensions.scroll,390);assert.equal(metrics.mobileDimensions.columns,1);metrics.mobile=true;
   await mp.screenshot({path:join(out,'system-health-mobile.png'),fullPage:true});

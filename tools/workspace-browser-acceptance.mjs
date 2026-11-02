@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
 import { createRequire } from "node:module";
 import { workspaceFixture } from "../tests/helpers/workspace-fixture.mjs";
+import { openStaffSection } from "../tests/helpers/staff-browser-navigation.mjs";
 const local = process.env.WORKSPACE_LOCAL_QUALITY === "1";
 assert.ok(
   process.env.CI === "true" || local,
@@ -281,6 +282,9 @@ try {
     false,
   );
   await home(p);
+  await openStaffSection(p, "systemHealth");
+  await p.locator("[data-health-refresh]").waitFor();
+  await home(p);
   metrics.navigation = true;
   await p.locator("[data-workspace-quick=new]").click();
   const customerForm = p.locator("[data-wx-customer]");
@@ -348,6 +352,9 @@ try {
     fullPage: true,
   });
   await mp.setViewportSize({ width: 320, height: 740 });
+  await home(mp);
+  await openStaffSection(mp, "programs");
+  await mp.locator("[data-new]").waitFor();
   await home(mp);
   assert.equal(
     await mp.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
