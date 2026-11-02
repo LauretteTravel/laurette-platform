@@ -46,3 +46,14 @@ jobs:
           name: synthetic-program-evidence
           path: ${{ runner.temp }}/voucher-evidence/phase4
           retention-days: 7
+      - name: Reports, filtered CSV and real Arabic PDF, goals and 390px mobile
+        run: node tools/report-browser-acceptance.mjs
+        env:
+          VOUCHER_TEST_DEPS: ${{ runner.temp }}/voucher-browser
+          VOUCHER_EVIDENCE: ${{ runner.temp }}/voucher-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-report-evidence
+          path: ${{ runner.temp }}/voucher-evidence/phase5
+          retention-days: 7

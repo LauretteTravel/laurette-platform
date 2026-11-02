@@ -1,3 +1,5 @@
+import * as REPORTS from './lib/reports.js';
+import * as TARGETS from './lib/report-targets.js';
 import * as PROGRAMS from './lib/programs.js';
 import * as VOUCHERS from './lib/vouchers.js';
 import * as DEADLINES from './lib/deadlines.js';
@@ -379,6 +381,12 @@ export function createApp(options = {}) {
   router.get('/api/admin/audit', api(API.auditLog, { action: 'audit:read' }));
   router.get('/api/admin/media', api(API.listMedia, { action: 'content:write' }));
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
+  router.get('/api/admin/reports/details',api(REPORTS.details,{action:'reports:read'}));
+  router.get('/api/admin/reports/document',api(REPORTS.document,{action:'reports:export'}));
+  router.get('/api/admin/report-targets',api(TARGETS.listTargets,{action:'reports:read'}));
+  router.post('/api/admin/report-targets',api(TARGETS.createTarget,{action:'reports:targets'}));
+  router.patch('/api/admin/report-targets/:id',api(TARGETS.updateTarget,{action:'reports:targets'}));
+  router.get('/api/admin/report-targets/:id/events',api(TARGETS.targetHistory,{action:'reports:read'}));
   router.get(
     "/api/admin/reports.csv",
     api(API.reportsCsv, { action: "reports:export" }),
@@ -677,6 +685,7 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/voucher-studio.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/voucher-ledger.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/program-workspace.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/reports.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -689,6 +698,7 @@ function adminShell(ctx) {
 <script src="/assets/js/voucher-studio.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-ledger.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/program-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/reports.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }
