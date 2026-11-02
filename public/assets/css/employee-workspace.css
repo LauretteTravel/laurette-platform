@@ -941,6 +941,19 @@
   width: 15px;
   height: 15px;
 }
+.wx-quick-block {
+  position: relative;
+}
+.wx-quick-block h2 {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: -25px;
+  margin: 0;
+  color: #15294a;
+  font-size: 13px;
+  font-weight: 850;
+  text-shadow: 0 1px 7px #fff;
+}
 .wx-quick-actions {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1615,6 +1628,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-inline-end: 0;
     gap: 9px;
+  }
+  .wx-quick-block h2 {
+    position: static;
+    margin: 0 4px 9px;
+    font-size: 17px;
   }
   .wx-quick {
     min-height: 85px;
