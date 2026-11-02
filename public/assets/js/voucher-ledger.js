@@ -20,7 +20,7 @@
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(value));
-  async function mount(container, { api, hasPermission }) {
+  async function mount(container, { api, hasPermission, initialSearch='' }) {
     container.innerHTML =
       '<div class="vl-root"><p>جارٍ تحميل أرشيف القسائم…</p></div>';
     const host = container.firstElementChild,
@@ -29,7 +29,7 @@
     let row = null,
       data = null,
       page = 1,
-      filters = {},
+      filters = initialSearch?{q:initialSearch}:{},
       generation = 0,
       dirty = false;
     const status = (message) => {

@@ -62,6 +62,8 @@
 
   /* ---------------- login ---------------- */
   function renderLogin(message = "") {
+    window.EmployeeWorkspace?.destroy();
+    document.body.classList.remove('workspace-mode');
     root.setAttribute('role', 'main');
     closeDrawer();
     clearInterval(notificationTimer);notificationTimer=null;
@@ -204,6 +206,8 @@
 
   function renderShell() {
     closeDrawer();
+    window.EmployeeWorkspace?.destroy();
+    document.body.classList.remove('workspace-mode');
     if (state.user.mustChange) {
       renderRequiredPasswordChange();
       return;
@@ -327,15 +331,19 @@
   }
 
   function onNavClick(e) {
+    if(e.target.closest('[data-workspace-bookings]')) { window.EmployeeWorkspace?.openBookings(); return; }
     const btn = e.target.closest('[data-section]');
     if (!btn) return;
     state.section = btn.dataset.section;
+    state.query=btn.dataset.workspaceFilter?{status:btn.dataset.workspaceFilter}:{};
     $$('.admin-nav button').forEach((b) => { const active=b.dataset.section === state.section; b.classList.toggle('is-active',active); if(active)b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
     $('#pageTitle').textContent = btn.textContent.replace(/\d+$/, '').trim();
     loadSection({ focus: true });
   }
 
   async function loadSection({ focus = false } = {}) {
+    window.EmployeeWorkspace?.destroy();
+    workspaceShell();
     const view = $('#view');
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
@@ -346,7 +354,7 @@
       overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       voucher: renderVoucher,
-      voucherArchive: () => window.VoucherLedger.mount(view,{api,hasPermission}),
+      voucherArchive: () => window.VoucherLedger.mount(view,{api,hasPermission,initialSearch:state.query.voucherSearch||''}),
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,
       reports: renderReports, marketing: renderMarketing,
       systemHealth: () => window.SystemHealth.mount(view,{api}),
@@ -361,7 +369,7 @@
       if(view.isConnected && section===state.section) {
         view.setAttribute('aria-busy','false');
         $('#viewStatus').textContent='اكتمل تحميل القسم';
-        if(focus)$('#pageTitle').focus({preventScroll:true});
+        if(focus)($('[data-workspace-heading]')||$('#pageTitle')).focus({preventScroll:true});
       }
     }
   }
@@ -379,46 +387,51 @@
 
   /* ---------------- overview ---------------- */
   async function renderOverview() {
-    const data = await api('/api/admin/overview');
-    const s = data.stats;
-    const count = (k) => s.byStatus[k] || 0;
-    const badge = $('[data-req-count]');
-    if (badge) badge.textContent = num(s.total);
-    $('#view').innerHTML = `
-      <div class="stat-grid">
-        <div class="stat"><span>طلبات جديدة</span><b>${num(count('new'))}</b><small>إجمالي الطلبات: ${num(s.total)}</small></div>
-        <div class="stat"><span>تحتاج متابعة</span><b>${num(s.followUps)}</b><small>${num(s.overdue)} طلب متأخر أكثر من يومين</small></div>
-        <div class="stat"><span>عروض أسعار مرسلة</span><b>${num(s.quotes)}</b><small>مؤكدة: ${num(count('confirmed'))}</small></div>
-        <div class="stat"><span>عملاء مسجلون</span><b>${num(s.customers)}</b><small>اليوم: ${num(s.today)} طلب</small></div>
-      </div>
-      <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-        ${Object.entries(data.types).map(([k, t]) => `<div class="stat"><span>${esc(t.label)}</span><b>${num(s.byType[k] || 0)}</b><small>${esc(t.department)}</small></div>`).join('')}
-      </div>
-      <div class="admin-card mb-3">
-        <div class="admin-card-head"><h2>طلبات تحتاج إجراءً</h2><span class="spacer" style="flex:1"></span><button class="btn btn-ghost btn-sm" data-refresh>تحديث</button></div>
-        <div class="admin-card-body" style="padding:0">
-          <table class="admin-table"><thead><tr><th>المرجع</th><th>النوع</th><th>الملخص</th><th>الحالة</th><th>آخر تحديث</th></tr></thead>
-          <tbody>${data.needsAction.length ? data.needsAction.map((r) => `<tr data-request="${r.id}">
-            <td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td><td>${esc(data.types[r.type]?.label || r.type)}</td>
-            <td>${esc(r.summary || '')}</td><td><span class="status-dot status-${r.status}">${esc(data.statuses[r.status]?.label)}</span></td>
-            <td>${dt(r.updated_at)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">لا توجد طلبات تحتاج متابعة الآن.</td></tr>'}
-          </tbody></table>
-        </div>
-      </div>
-      <div class="admin-card">
-        <div class="admin-card-head"><h2>أحدث الطلبات</h2></div>
-        <div class="admin-card-body" style="padding:0">
-          <table class="admin-table"><thead><tr><th>المرجع</th><th>العميل</th><th>النوع</th><th>الحالة</th><th>التاريخ</th></tr></thead>
-          <tbody>${data.recent.length ? data.recent.map((r) => `<tr data-request="${r.id}">
-            <td class="ref"><button type="button" class="table-action" aria-label="فتح الطلب ${esc(r.reference)}">${esc(r.reference)}</button></td><td>${esc(r.customer || '—')}</td>
-            <td>${esc(data.types[r.type]?.label || r.type)}</td>
-            <td><span class="status-dot status-${r.status}">${esc(data.statuses[r.status]?.label)}</span></td>
-            <td>${dt(r.created_at)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">لا توجد طلبات بعد. الطلبات الواردة من الموقع ستظهر هنا مباشرة.</td></tr>'}
-          </tbody></table>
-        </div>
-      </div>`;
-    bindRequestRows();
-    $('[data-refresh]')?.addEventListener('click', renderOverview);
+    await window.EmployeeWorkspace.mount($('#view'),{
+      api,user:state.user,hasPermission,go:workspaceGo,openRequest,openCustomer,openTask,
+      openPanel:(html)=>{openDrawer(html);return state.overlay;},closePanel:closeDrawer,
+      notify:toast,openNotifications,notificationButton:$('#staffNotifications'),openMenu:workspaceMenu,
+    });
+  }
+
+  function workspaceGo(section,query={}) {
+    if(!visibleSections().some(s=>s.id===section)){toast('لا تملك صلاحية هذا القسم','bad');return;}
+    closeDrawer();state.section=section;state.query=query;
+    $('#pageTitle').textContent=SECTIONS.find(s=>s.id===section)?.label||'';
+    return loadSection({focus:true});
+  }
+  function workspaceShell() {
+    const active=state.section==='overview',side=$('.admin-side'),nav=$('.admin-side nav'),brand=$('.admin-side .brand');
+    document.body.classList.toggle('workspace-mode',active);
+    if(!side||!nav||!brand)return;
+    const sections=visibleSections();
+    const button=(id,label,symbol,extra='')=>{
+      const item=sections.find(s=>s.id===id);if(!item)return '';
+      return '<li><button type="button" data-section="'+id+'" '+extra+' aria-label="'+esc(label||item.label)+'" '+(state.section===id&&!extra?'aria-current="page" class="is-active"':'')+'>'+window.EmployeeWorkspace.icon(symbol)+'<span class="wx-nav-label">'+esc(label||item.label)+'</span></button></li>';
+    };
+    if(active){
+      brand.innerHTML='<img class="wx-official-logo" src="/media/brand/logo.png" width="190" height="78" alt="لوريت للسياحة والسفر"><small>Laurette Travel</small>';
+      const primary=['overview','customers','requests','voucherArchive','voucher','programs','followups','reports'];
+      const admin=['users','organization','settings'];
+      let html='<ul class="admin-nav">'+button('overview','الرئيسية','home')+button('customers','عملائي','users')+button('requests','الطلبات (CRM)','inbox')+button('requests','العروض','ticket','data-workspace-filter="quoted"');
+      if(hasPermission('vouchers:read')&&hasPermission('requests:read'))html+='<li><button type="button" data-workspace-bookings aria-label="الحجوزات">'+window.EmployeeWorkspace.icon('plane')+'<span class="wx-nav-label">الحجوزات</span></button></li>';
+      html+=button(hasPermission('vouchers:read')?'voucherArchive':'voucher','القسائم','ticket')+button('programs','البرامج','layers')+button('followups','متابعاتي','calendar')+button('reports','التقارير','chart')+'</ul>';
+      if(admin.some(id=>sections.some(s=>s.id===id))){html+='<span class="wx-system-title">إدارة النظام</span><ul class="admin-nav">'+button('users','الموظفون','users')+button('organization','الفروع والأقسام','building')+(hasPermission('organization:write')?button('organization','الصلاحيات','shield'):'')+button('settings','الإعدادات','settings')+'</ul>';}
+      const more=sections.filter(s=>!primary.includes(s.id)&&!admin.includes(s.id));
+      if(hasPermission('vouchers:read')&&sections.some(s=>s.id==='voucher'))more.push(SECTIONS.find(s=>s.id==='voucher'));
+      if(more.length)html+='<details class="wx-more-navigation"><summary>المزيد من أدوات العمل</summary><ul class="admin-nav">'+more.map(s=>button(s.id,s.label,s.id==='tasks'?'check':s.id==='deadlines'?'clock':'layers')).join('')+'</ul></details>';
+      nav.innerHTML=html;
+    }else{
+      brand.innerHTML='<span class="brand-mark">ل</span><span class="brand-text"><b>لوريت</b><span>لوحة الإدارة</span></span>';
+      nav.innerHTML='<ul class="admin-nav">'+sections.map(s=>'<li><button type="button" data-section="'+s.id+'" class="'+(state.section===s.id?'is-active':'')+'" '+(state.section===s.id?'aria-current="page"':'')+'><span aria-hidden="true">'+s.icon+'</span>'+esc(s.label)+(s.id==='requests'?'<span class="count" data-req-count>0</span>':'')+'</button></li>').join('')+'</ul>';
+      const context=$('[data-workspace-membership] select');if(context)$('#membershipSlot').append(context);
+    }
+  }
+  function workspaceMenu() {
+    const nav=$('.admin-side nav');if(!nav)return;
+    openDrawer('<div class="drawer-head"><h2>قائمة العمل</h2><button class="drawer-close" data-close-drawer aria-label="إغلاق">×</button></div><nav class="wx-mobile-nav" aria-label="أقسام مساحة العمل">'+nav.innerHTML+'</nav>');
+    $$('[data-section]',state.overlay).forEach(b=>b.onclick=()=>workspaceGo(b.dataset.section,b.dataset.workspaceFilter?{status:b.dataset.workspaceFilter}:{}));
+    $('[data-workspace-bookings]',state.overlay)?.addEventListener('click',()=>{closeDrawer();window.EmployeeWorkspace.openBookings();});
   }
 
   function bindRequestRows() {
@@ -1289,7 +1302,7 @@
   }
 
   /* ---------------- programs ---------------- */
-  async function renderPrograms() { await window.ProgramWorkspace.mount($('#view'),{api,hasPermission}); }
+  async function renderPrograms() { await window.ProgramWorkspace.mount($('#view'),{api,hasPermission,initialSearch:state.query.programSearch||''}); }
 
   function fieldControl(field, value) {
     const id = `ff-${field.key}`;
@@ -1681,6 +1694,7 @@
       "reports:finance": "التقارير المالية والتكاليف",
       "reports:targets": "إدارة أهداف الأداء",
       "system:health": "صحة النظام — إدارة المؤسسة فقط",
+      "exchange:manage": "إدارة العملات والأسعار اليدوية — المؤسسة وMFA",
       "requests:assign": "إسناد الطلبات",
       "requests:transfer": "تحويل الطلبات",
       "requests:approve": "اعتماد التأكيد",
@@ -2043,7 +2057,7 @@
       wrap.remove();
       document.body.style.overflow=wrap.previousOverflow;
       state.overlay = null;
-      const destination=wrap.previousFocus?.isConnected?wrap.previousFocus:$('#pageTitle');
+      const destination=wrap.previousFocus?.isConnected?wrap.previousFocus:($('[data-workspace-heading]')||$('#pageTitle'));
       destination?.focus({preventScroll:true});
     }
   }

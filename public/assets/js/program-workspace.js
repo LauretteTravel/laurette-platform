@@ -1,6 +1,6 @@
 /* Private, versioned program workspace. The public catalogue changes only after approval + publish. */
 window.ProgramWorkspace = {
-  async mount(container, { api, hasPermission }) {
+  async mount(container, { api, hasPermission, initialSearch='' }) {
     const root = document.createElement("div");
     root.className = "pw";
     container.replaceChildren(root);
@@ -85,7 +85,7 @@ window.ProgramWorkspace = {
       current,
       dirty = false,
       page = 1,
-      filters = { q: "", state: "", category: "" };
+      filters = { q: initialSearch, state: "", category: "" };
     const message = (v, ok = false) => {
       const e = root.querySelector("[data-pw-status]");
       if (e) {

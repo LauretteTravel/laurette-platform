@@ -1,4 +1,5 @@
 import * as REPORTS from './lib/reports.js';
+import { createExchangeRateService } from './lib/exchange-rates.js';
 import { createSystemHealth, workerAttempt, workerFinished } from './lib/system-health.js';
 import * as TARGETS from './lib/report-targets.js';
 import * as PROGRAMS from './lib/programs.js';
@@ -126,6 +127,7 @@ export function createApp(options = {}) {
 
   const limiter = new RateLimiter();
   const router = createRouter();
+  const exchangeRates=createExchangeRateService({db,provider:options.exchangeRateProvider||null});
   const startedAt = Date.now();
   const whatsappEnabled = WHATSAPP.whatsappNotificationsReady();
   const workers = { deadlines: { scheduled: true, intervalSeconds: 60, running: false },
@@ -290,6 +292,9 @@ export function createApp(options = {}) {
   router.get('/api/admin/notifications', api(TASKS.notifications,{action:'tasks:read'}));
   router.post('/api/admin/notifications/:id/read', api(TASKS.readNotification,{action:'tasks:read'}));
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
+  router.get('/api/admin/exchange-rates',api(exchangeRates.getRates,{action:'overview:read'}));
+  router.patch('/api/admin/exchange-rates',api(exchangeRates.updateRates,{action:'exchange:manage'}));
+  router.post('/api/admin/exchange-rates/refresh',api(exchangeRates.refreshRates,{action:'exchange:manage'}));
   router.get('/api/admin/vouchers',api(VOUCHERS.listVouchers,{action:'vouchers:read'}));
   router.post('/api/admin/vouchers',api(VOUCHERS.createVoucher,{action:'vouchers:write'}));
   router.get('/api/admin/vouchers/:id',api(VOUCHERS.getVoucher,{action:'vouchers:read'}));
@@ -700,6 +705,7 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/program-workspace.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/reports.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/admin-polish.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/employee-workspace.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
@@ -714,6 +720,7 @@ function adminShell(ctx) {
 <script src="/assets/js/program-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/reports.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/system-health.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/employee-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }

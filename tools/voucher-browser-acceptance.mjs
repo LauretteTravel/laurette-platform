@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { openStaffSection } from '../tests/helpers/staff-browser-navigation.mjs';
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -118,9 +119,7 @@ async function login(page) {
     .fill("voucher-browser");
   await page.getByLabel("كلمة المرور", { exact: true }).fill(password);
   await page.getByRole("button", { name: "دخول", exact: true }).click();
-  await page
-    .getByRole("button", { name: "القسائم المؤرشفة", exact: true })
-    .click();
+  await openStaffSection(page,'voucherArchive');
   await page
     .getByRole("button", { name: "قسيمة جديدة", exact: true })
     .waitFor();
