@@ -1,4 +1,5 @@
 import * as REPORTS from './lib/reports.js';
+import { createSystemHealth, workerAttempt, workerFinished } from './lib/system-health.js';
 import * as TARGETS from './lib/report-targets.js';
 import * as PROGRAMS from './lib/programs.js';
 import * as VOUCHERS from './lib/vouchers.js';
@@ -126,9 +127,18 @@ export function createApp(options = {}) {
   const limiter = new RateLimiter();
   const router = createRouter();
   const startedAt = Date.now();
-  const whatsappWorker = WHATSAPP.whatsappNotificationsReady()
+  const whatsappEnabled = WHATSAPP.whatsappNotificationsReady();
+  const workers = { deadlines: { scheduled: true, intervalSeconds: 60, running: false },
+    whatsapp: { scheduled: whatsappEnabled, intervalSeconds: 5, running: false } };
+  const systemHealth = createSystemHealth({ dbFile, startedAt, workers, whatsappEnabled });
+  const whatsappWorker = whatsappEnabled
     ? setInterval(() => {
-      WHATSAPP.processWhatsAppOutbox(db).catch((error) => {
+      const tick = Date.now();
+      workerAttempt(workers.whatsapp, tick);
+      WHATSAPP.processWhatsAppOutbox(db).then(() => {
+        workerFinished(workers.whatsapp, { ok: true, durationMs: Date.now() - tick });
+      }).catch((error) => {
+        workerFinished(workers.whatsapp, { ok: false, durationMs: Date.now() - tick });
         console.error('[whatsapp] outbox worker failed:', error.message);
       });
     }, 5_000)
@@ -382,6 +392,7 @@ export function createApp(options = {}) {
   router.get('/api/admin/media', api(API.listMedia, { action: 'content:write' }));
   router.get('/api/admin/reports', api(API.reports, { action: 'reports:read' }));
   router.get('/api/admin/reports/details',api(REPORTS.details,{action:'reports:read'}));
+  router.get('/api/admin/system-health',api(systemHealth,{action:'system:health'}));
   router.get('/api/admin/reports/document',api(REPORTS.document,{action:'reports:export'}));
   router.get('/api/admin/report-targets',api(TARGETS.listTargets,{action:'reports:read'}));
   router.post('/api/admin/report-targets',api(TARGETS.createTarget,{action:'reports:targets'}));
@@ -630,7 +641,11 @@ export function createApp(options = {}) {
     return sendHtml(ctx, err.status || 500, offlinePage({ settings, nonce: ctx.nonce, baseUrl }), { ...securityHeaders(ctx.nonce, ctx.secure, ctx.tracking) });
   }
 
-  const deadlineWorker=setInterval(()=>{try{DEADLINES.runDeadlineJob(db);}catch{console.error('[deadlines] Scheduler failed; inspect database and policy');}},60000);
+  const deadlineWorker=setInterval(()=>{
+    const tick = Date.now(); workerAttempt(workers.deadlines, tick);
+    try { DEADLINES.runDeadlineJob(db); workerFinished(workers.deadlines, { ok: true, durationMs: Date.now() - tick }); }
+    catch { workerFinished(workers.deadlines, { ok: false, durationMs: Date.now() - tick }); console.error('[deadlines] Scheduler failed; inspect database and policy'); }
+  },60000);
   deadlineWorker.unref();
   const server = http.createServer((req, res) => {
     res.on('finish', () => {
@@ -676,8 +691,6 @@ function adminShell(ctx) {
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0B2A43">
 <title>لوحة إدارة لوريت</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" href="/assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/assets/fonts/cairo.css?v=1">
 <link rel="stylesheet" href="/assets/css/app.css?v=${ASSET_V}">
@@ -686,12 +699,13 @@ function adminShell(ctx) {
 <link rel="stylesheet" href="/assets/css/voucher-ledger.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/program-workspace.css?v=${ASSET_V}">
 <link rel="stylesheet" href="/assets/css/reports.css?v=${ASSET_V}">
+<link rel="stylesheet" href="/assets/css/admin-polish.css?v=${ASSET_V}">
 <link rel="icon" href="/art/haram.svg?v=0" type="image/svg+xml">
 </head>
 <body class="admin-body">
-<main id="adminRoot" aria-live="polite">
+<div id="adminRoot" role="main">
   <div class="login-wrap"><div class="login-card"><h1>لوحة إدارة لوريت</h1><p class="muted">جارٍ التحميل…</p></div></div>
-</main>
+</div>
 <noscript><p style="padding:24px">تحتاج إلى تفعيل JavaScript لاستخدام لوحة الإدارة.</p></noscript>
 <script src="/assets/js/admin.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-generator.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
@@ -699,6 +713,7 @@ function adminShell(ctx) {
 <script src="/assets/js/voucher-ledger.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/program-workspace.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/reports.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
+<script src="/assets/js/system-health.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 </body>
 </html>`;
 }
