@@ -1,0 +1,37 @@
+name: Phase 3 voucher browser acceptance
+on:
+  pull_request:
+    branches: ["main", "codex/employee-operations-phase-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: voucher-browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  voucher_browser:
+    name: Synthetic vouchers — desktop, mobile and real PDF
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+      - name: Install isolated browser test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/voucher-browser" --ignore-scripts --no-audit --no-fund playwright@1.64.1
+          "$RUNNER_TEMP/voucher-browser/node_modules/.bin/playwright" install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+      - name: Exercise real browser and exported PDFs with synthetic data only
+        run: node tools/voucher-browser-acceptance.mjs
+        env:
+          VOUCHER_TEST_DEPS: ${{ runner.temp }}/voucher-browser
+          VOUCHER_EVIDENCE: ${{ runner.temp }}/voucher-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-voucher-evidence
+          path: ${{ runner.temp }}/voucher-evidence
+          retention-days: 7

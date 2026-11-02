@@ -1,0 +1,284 @@
+.vl-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.7fr);
+  gap: 20px;
+  align-items: start;
+}
+.vl-editor section {
+  min-width: 0;
+}
+.vl-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.vl-fields label,
+.vl-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.vl-editor textarea {
+  min-height: 90px;
+}
+.vl-editor fieldset {
+  border: 1px solid #dde3e8;
+  border-radius: 10px;
+  padding: 14px;
+  margin-block: 12px;
+}
+.vl-preview {
+  background: #fff;
+  border: 1px solid #dbe3e8;
+  border-top: 4px solid #e5a342;
+  border-radius: 12px;
+  padding: 20px;
+  position: sticky;
+  top: 85px;
+  overflow-wrap: anywhere;
+}
+.vl-preview pre {
+  white-space: pre-wrap;
+  font: inherit;
+}
+.vl-note {
+  padding: 10px 14px;
+  background: #fff6e5;
+  border-inline-start: 4px solid #dc9e3e;
+  border-radius: 6px;
+}
+.vl-archive {
+  overflow: auto;
+}
+.vl-preview img {
+  max-width: 150px;
+}
+.vl-events {
+  max-height: 300px;
+  overflow: auto;
+}
+.vd-document {
+  font-family: Cairo, Arial, sans-serif;
+  background: #edf1f5;
+  margin: 0;
+  color: #0b2a43;
+  line-height: 1.7;
+}
+.vd-controls {
+  position: sticky;
+  top: 0;
+  background: #0b2a43;
+  color: #fff;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+.vd-controls button {
+  font: inherit;
+  background: #f0ad43;
+  color: #0b2a43;
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 18px;
+  cursor: pointer;
+}
+.vd-controls button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.vd-sheet {
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 20px auto;
+  background: white;
+  padding: 14mm;
+  overflow-wrap: anywhere;
+}
+.vd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 3px solid #e6a13d;
+  padding-bottom: 16px;
+}
+.vd-header img {
+  object-fit: contain;
+}
+.vd-header h1 {
+  font-size: 24px;
+  margin: 0;
+}
+.vd-state {
+  background: #e6f4ed;
+  border: 1px solid #248256;
+  padding: 10px 14px;
+  font-weight: 700;
+  text-align: center;
+}
+.vd-warning {
+  background: #fff1df;
+  border: 2px solid #b95b0d;
+  color: #843405;
+  font-size: 19px;
+}
+.vd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.vd-field {
+  display: flex;
+  flex-direction: column;
+  margin-block: 5px;
+}
+.vd-field b {
+  font-size: 12px;
+  color: #526778;
+}
+.vd-field span {
+  white-space: pre-wrap;
+}
+.vd-sheet h2 {
+  font-size: 17px;
+  color: #0b2a43;
+  border-inline-start: 4px solid #e6a13d;
+  padding-inline-start: 10px;
+  margin-block: 18px 10px;
+}
+.vd-sheet h3 {
+  font-size: 15px;
+}
+.vd-sheet p {
+  white-space: pre-wrap;
+}
+.vd-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.vd-sheet th,
+.vd-sheet td {
+  padding: 9px;
+  border-bottom: 1px solid #dbe3ea;
+  text-align: start;
+}
+.vd-sheet th {
+  background: #f1f5f7;
+}
+.vd-segment {
+  border: 1px solid #e0e6eb;
+  border-radius: 7px;
+  padding: 12px;
+  margin-block: 12px;
+}
+.vd-footer {
+  margin-top: 24px;
+  border-top: 2px solid #e6a13d;
+  font-size: 12px;
+  padding-top: 10px;
+}
+.vd-footer small {
+  color: #657887;
+}
+.vl-root {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.vl-root .toolbar h2 {
+  min-width: 0;
+  max-width: 100%;
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
+}
+.vl-editor fieldset,
+.vl-fields > * {
+  min-width: 0;
+}
+.vl-editor input,
+.vl-editor textarea,
+.vl-editor select {
+  max-width: 100%;
+}
+.vd-sheet {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.vd-header {
+  padding-bottom: 12px;
+}
+.vd-header h1 {
+  font-size: 22px;
+}
+.vd-state {
+  padding: 8px 12px;
+}
+.vd-grid {
+  gap: 8px;
+}
+.vd-field {
+  margin-block: 3px;
+}
+.vd-field b {
+  font-size: 11px;
+}
+.vd-sheet h2 {
+  font-size: 16px;
+  margin-block: 14px 8px;
+}
+.vd-sheet th,
+.vd-sheet td {
+  padding: 6px;
+}
+.vd-segment {
+  padding: 10px;
+  margin-block: 10px;
+}
+.vd-footer {
+  margin-top: 16px;
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .vl-editor {
+    grid-template-columns: 1fr;
+  }
+  .vl-preview {
+    position: static;
+  }
+  .vl-fields {
+    grid-template-columns: 1fr;
+  }
+  .vd-sheet {
+    margin: 12px 0;
+  }
+  .vd-controls {
+    position: static;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  .vd-controls {
+    display: none;
+  }
+  .vd-document {
+    background: white;
+  }
+  .vd-sheet {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+  .vd-block,
+  tr {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+}
