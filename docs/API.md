@@ -63,7 +63,7 @@ POST /api/assistant
 
 ### استيراد محادثات واتساب
 
-يضبط مسؤول الخادم متغيّر البيئة `EXTENSION_SECRET` ويُدخل قيمته في إعدادات إضافة **WhatsApp to CRM Bridge**. ترسل الإضافة طلب `POST /api/save-chat` مع `Authorization: Bearer <token>` و`Content-Type: application/json`.
+لتفعيل الاستيراد يضبط مسؤول الخادم `WHATSAPP_BRIDGE_ENABLED=true` و`EXTENSION_SECRET`، ثم يُدخل قيمة المفتاح في إعدادات إضافة **WhatsApp to CRM Bridge**. ترسل الإضافة طلب `POST /api/save-chat` مع `Authorization: Bearer <token>` و`Content-Type: application/json`.
 
 ```json
 {
@@ -75,7 +75,7 @@ POST /api/assistant
 }
 ```
 
-يتطلب الطلب اسمًا أو رقم هاتف، ومن رسالة واحدة إلى عشر رسائل. تُحفظ المحادثة في جدول `whatsapp_chat_imports` في SQLite. يعيد الحفظ الأول `201 { ok: true, id }`، ويعيد تكرار البيانات المطابقة `200 { ok: true, id, duplicate: true }`. يعيد الرمز غير الصحيح `403`، ويعيد غياب متغيّر البيئة `503`.
+يتطلب الطلب اسمًا أو رقم هاتف، ومن رسالة واحدة إلى عشر رسائل. تُحفظ المحادثة في جدول `whatsapp_chat_imports` في SQLite. يعيد الحفظ الأول `201 { ok: true, id }`، ويعيد تكرار البيانات المطابقة `200 { ok: true, id, duplicate: true }`. يعيد الرمز غير الصحيح `403`. عند إيقاف الاستيراد أو غياب المفتاح، يعيد المسار `503`.
 
 يتضمن رد النجاح `analysis`، وفيه اسم العميل ورقمه الأساسي إن توفر، والتصنيف المبني على كلمات رسائل العميل، وعدد الرسائل، ووقت التحليل، والحالة `PENDING_REVIEW`. يجري التحليل داخل الخادم ويُحفظ في `analysis_json` مع المحادثة. عند إعادة إرسال سجل قديم، يحسب الخادم تحليله إذا كان الحقل فارغًا.
 
