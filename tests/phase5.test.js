@@ -925,7 +925,7 @@ test("5 migration7 to8 keeps all historical cells and checksums, retains a verif
   );
   copyFileSync(backup, file + ".restore");
   d = openDb(file + ".restore");
-  assert.equal(d.migrationBackups.length, 1);
+  assert.equal(d.migrationBackups.length, 2);
   d.close();
   d = openDb(file + ".restore");
   assert.equal(d.migrationBackups.length, 0);

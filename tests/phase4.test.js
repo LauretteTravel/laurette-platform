@@ -757,7 +757,7 @@ test("4 migration6 to7 retains every historical cell and frozen checksum, restor
   assert.equal(digest(readFileSync(backup)), before);
   copyFileSync(backup, file + ".restored");
   upgraded = openDb(file + ".restored");
-  assert.equal(upgraded.migrationBackups.length, 2);
+  assert.equal(upgraded.migrationBackups.length, 3);
   upgraded.close();
   upgraded = openDb(file + ".restored");
   assert.equal(upgraded.migrationBackups.length, 0);

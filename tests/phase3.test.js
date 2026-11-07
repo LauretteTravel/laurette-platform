@@ -664,7 +664,7 @@ test("3 migration5 backup retains all old values and checksums, restores exactly
     createHash("sha256").update(readFileSync(backup)).digest("hex"),
   );
   upgraded = openDb(restored);
-  assert.equal(upgraded.migrationBackups.length, 3);
+  assert.equal(upgraded.migrationBackups.length, 4);
   assert.equal(upgraded.prepare("PRAGMA foreign_key_check").all().length, 0);
   upgraded.close();
   upgraded = openDb(restored);
