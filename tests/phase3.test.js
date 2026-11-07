@@ -655,7 +655,7 @@ test("3 migration5 backup retains all old values and checksums, restores exactly
   });
   assert.equal(rehearsal.sourceVersion, 5);
   assert.equal(rehearsal.candidateVersion, 9);
-  assert.equal(rehearsal.migrationSnapshots, 3);
+  assert.equal(rehearsal.migrationSnapshots, 4);
   assert.equal(rehearsal.isolatedRestoreExact, true);
   const restored = file + ".restored";
   copyFileSync(backup, restored);

@@ -428,7 +428,7 @@ test("2C version3 snapshot restores exactly and blobs survive reopen with metada
     .all();
   raw.close();
   d = openDb(restore);
-  assert.equal(d.migrationBackups.length, 5);
+  assert.equal(d.migrationBackups.length, 6);
   assert.deepEqual(
     d
       .prepare(

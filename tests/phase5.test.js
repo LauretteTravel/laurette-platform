@@ -916,7 +916,7 @@ test("5 migration7 to8 keeps all historical cells and checksums, retains a verif
       privateRoot: realpathSync("data/phase1b-testing"),
     });
   assert.equal(r.candidateVersion, 9);
-  assert.equal(r.migrationSnapshots, 1);
+  assert.equal(r.migrationSnapshots, 2);
   assert.equal(r.historicalValuesPreserved, true);
   assert.equal(r.isolatedRestoreExact, true);
   assert.equal(

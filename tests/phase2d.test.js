@@ -470,7 +470,7 @@ test("2D migration4 snapshot restores ledger and alert deduplication survives da
   const ledger = raw.prepare("SELECT * FROM schema_migrations").all();
   raw.close();
   d = openDb(restored);
-  assert.equal(d.migrationBackups.length, 4);
+  assert.equal(d.migrationBackups.length, 5);
   assert.deepEqual(
     d.prepare("SELECT * FROM schema_migrations WHERE version<5").all(),
     ledger,

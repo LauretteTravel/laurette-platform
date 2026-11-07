@@ -751,7 +751,7 @@ test("4 migration6 to7 retains every historical cell and frozen checksum, restor
     });
   assert.equal(result.candidateVersion, 9);
   assert.equal(result.sourceVersion, 6);
-  assert.equal(result.migrationSnapshots, 2);
+  assert.equal(result.migrationSnapshots, 3);
   assert.equal(result.isolatedRestoreExact, true);
   assert.equal(result.historicalValuesPreserved, true);
   assert.equal(digest(readFileSync(backup)), before);
