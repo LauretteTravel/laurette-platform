@@ -28,7 +28,7 @@ function compareHistorical(before,after,{migration=false}={}){
      if(digest(old)!==digest(current))throw new Error('Historical cell mismatch');rowCount++;
    }
  }
- if(migration){const extra=after.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r=>r.version);if(JSON.stringify(extra)!=='[1,2,3,4,5,6,7,8]')throw new Error('Unexpected migration ledger');}
+ if(migration){const extra=after.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r=>r.version);if(JSON.stringify(extra)!=='[1,2,3,4,5,6,7,8,9]')throw new Error('Unexpected migration ledger');}
  return {tables:names.length,rows:rowCount};
 }
 export function rehearsePrivateCopy({sourceFile,privateRoot,maxBytes=32*1024*1024}){
@@ -37,29 +37,29 @@ export function rehearsePrivateCopy({sourceFile,privateRoot,maxBytes=32*1024*102
  if(!statSync(source).isFile()||statSync(source).size>maxBytes)throw new Error('Source exceeds the bounded rehearsal size');
  const free=statfsSync(root);if(free.bavail*free.bsize<Math.max(64*1024*1024,statSync(source).size*8))throw new Error('Insufficient private disk space for rehearsal');
  let live=new DatabaseSync(source,{readOnly:true});let version;
- try{check(live);version=live.prepare('PRAGMA user_version').get().user_version;if(![2,5,6,7].includes(version))throw new Error('Rehearsal requires version 2, 5, 6 or 7 source');}catch(error){live.close();throw error;}
+ try{check(live);version=live.prepare('PRAGMA user_version').get().user_version;if(![2,5,6,7,8].includes(version))throw new Error('Rehearsal requires version 2, 5, 6, 7 or 8 source');}catch(error){live.close();throw error;}
  const directory=mkdtempSync(join(root,'phase2-private-rehearsal-'));chmodSync(directory,0o700);
- const pristine=join(directory,'source-v'+version+'.sqlite'),candidate=join(directory,'candidate-v8.sqlite'),restored=join(directory,'restored-v'+version+'.sqlite');
+ const pristine=join(directory,'source-v'+version+'.sqlite'),candidate=join(directory,'candidate-v9.sqlite'),restored=join(directory,'restored-v'+version+'.sqlite');
  try{live.prepare('VACUUM INTO ?').run(pristine);}finally{live.close();}
  chmodSync(pristine,0o600);copyFileSync(pristine,candidate);chmodSync(candidate,0o600);
  const original=new DatabaseSync(pristine,{readOnly:true});let upgraded;
  let report;
  try{
    check(original);upgraded=openDb(candidate);check(upgraded);
-   if(upgraded.prepare('PRAGMA user_version').get().user_version!==8)throw new Error('Upgrade did not reach version 8');
-   if(upgraded.migrationBackups.length!==8-version)throw new Error('Expected private snapshots for every new migration');
+   if(upgraded.prepare('PRAGMA user_version').get().user_version!==9)throw new Error('Upgrade did not reach version 9');
+   if(upgraded.migrationBackups.length!==9-version)throw new Error('Expected private snapshots for every new migration');
    const preservation=compareHistorical(original,upgraded,{migration:true});
    for(const backup of upgraded.migrationBackups){const b=new DatabaseSync(backup,{readOnly:true});try{check(b);}finally{b.close();}chmodSync(backup,0o600);}
    upgraded.close();upgraded=null;
    const reopened=openDb(candidate);try{check(reopened);if(reopened.migrationBackups.length)throw new Error('Reopen unexpectedly reran migrations');}finally{reopened.close();}
    copyFileSync(pristine,restored);chmodSync(restored,0o600);const rollback=new DatabaseSync(restored,{readOnly:true});try{check(rollback);if(rollback.prepare('PRAGMA user_version').get().user_version!==version)throw new Error('Restore version mismatch');compareHistorical(original,rollback);}finally{rollback.close();}
    const production=new DatabaseSync(source,{readOnly:true});try{if(production.prepare('PRAGMA user_version').get().user_version!==version)throw new Error('Source schema changed during rehearsal');}finally{production.close();}
-   report={ok:true,sourceVersion:version,candidateVersion:8,sourceOpenedReadOnly:true,historicalTables:preservation.tables,historicalRowsChecked:preservation.rows,historicalValuesPreserved:true,migrationSnapshots:8-version,reopenDidNotRerun:true,isolatedRestoreExact:true,integrity:'ok',foreignKeyErrors:0,retainedPrivately:true,at:new Date().toISOString()};
+   report={ok:true,sourceVersion:version,candidateVersion:9,sourceOpenedReadOnly:true,historicalTables:preservation.tables,historicalRowsChecked:preservation.rows,historicalValuesPreserved:true,migrationSnapshots:9-version,reopenDidNotRerun:true,isolatedRestoreExact:true,integrity:'ok',foreignKeyErrors:0,retainedPrivately:true,at:new Date().toISOString()};
    writeFileSync(join(directory,'summary.json'),JSON.stringify(report,null,2),{mode:0o600});return report;
  }finally{upgraded?.close();original.close();}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2),source=args[args.indexOf('--source')+1],root=args[args.indexOf('--private-root')+1];
- if(!args.includes('--source')||!args.includes('--private-root')||!source||!root)throw new Error('Usage: --source <private v2/v5/v6/v7 DB> --private-root <private parent directory>');
+ if(!args.includes('--source')||!args.includes('--private-root')||!source||!root)throw new Error('Usage: --source <private v2/v5/v6/v7/v8 DB> --private-root <private parent directory>');
  try{console.log(JSON.stringify(rehearsePrivateCopy({sourceFile:source,privateRoot:root})));}catch{console.error('Private migration rehearsal failed; source was never opened for writing. Inspect the isolated directory on the server.');process.exitCode=1;}
 }

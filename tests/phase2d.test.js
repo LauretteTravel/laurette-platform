@@ -460,7 +460,7 @@ test("2D migration4 snapshot restores ledger and alert deduplication survives da
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let d = openDb(file);
-  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 9);
   const backup = d.migrationBackups[4];
   d.close();
   const restored = file + ".v4";
@@ -470,7 +470,7 @@ test("2D migration4 snapshot restores ledger and alert deduplication survives da
   const ledger = raw.prepare("SELECT * FROM schema_migrations").all();
   raw.close();
   d = openDb(restored);
-  assert.equal(d.migrationBackups.length, 4);
+  assert.equal(d.migrationBackups.length, 5);
   assert.deepEqual(
     d.prepare("SELECT * FROM schema_migrations WHERE version<5").all(),
     ledger,
