@@ -882,7 +882,7 @@ test("5 migration7 to8 keeps all historical cells and checksums, retains a verif
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let d = openDb(file);
-  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(d.prepare("PRAGMA user_version").get().user_version, 9);
   const backup = d.migrationBackups[7];
   raw = new DatabaseSync(backup, { readOnly: true });
   assert.equal(raw.prepare("PRAGMA user_version").get().user_version, 7);
@@ -915,7 +915,7 @@ test("5 migration7 to8 keeps all historical cells and checksums, retains a verif
       sourceFile: backup,
       privateRoot: realpathSync("data/phase1b-testing"),
     });
-  assert.equal(r.candidateVersion, 8);
+  assert.equal(r.candidateVersion, 9);
   assert.equal(r.migrationSnapshots, 1);
   assert.equal(r.historicalValuesPreserved, true);
   assert.equal(r.isolatedRestoreExact, true);

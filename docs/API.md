@@ -61,6 +61,22 @@ POST /api/assistant
 - `sessionId` يُنشأ فقط عند `consent: true`؛ بلا موافقة لا يُحفظ أي شيء في القاعدة.
 - عند غياب معلومة موثوقة: `escalate: true` ونص يحوّل العميل إلى موظف.
 
+### استيراد محادثات واتساب
+
+يضبط مسؤول الخادم متغيّر البيئة `EXTENSION_SECRET` ويُدخل قيمته في إعدادات إضافة **WhatsApp to CRM Bridge**. ترسل الإضافة طلب `POST /api/save-chat` مع `Authorization: Bearer <token>` و`Content-Type: application/json`.
+
+```json
+{
+  "source": "whatsapp-web",
+  "contact": { "name": "عميل تجريبي", "phone": null },
+  "messages": [
+    { "id": null, "direction": "incoming", "text": "رسالة تجريبية", "label": null }
+  ]
+}
+```
+
+يتطلب الطلب اسمًا أو رقم هاتف، ومن رسالة واحدة إلى عشر رسائل. تُحفظ المحادثة في جدول `whatsapp_chat_imports` في SQLite. يعيد الحفظ الأول `201 { ok: true, id }`، ويعيد تكرار البيانات المطابقة `200 { ok: true, id, duplicate: true }`. يعيد الرمز غير الصحيح `403`، ويعيد غياب متغيّر البيئة `503`.
+
 ## الإدارة (تتطلب جلسة)
 
 | الطريقة | المسار | الصلاحية | الغرض |

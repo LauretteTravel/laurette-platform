@@ -27,6 +27,7 @@ import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, 
 import * as API from "./lib/api.js";
 import * as CLIENT_API from "./lib/client-api.js";
 import * as WHATSAPP from "./lib/whatsapp.js";
+import { saveChat } from "./lib/whatsapp-bridge.js";
 import { COOKIE } from "./lib/api.js";
 import * as STAFF from "./lib/staff-api.js";
 import * as STAFF_MFA from "./lib/staff-mfa.js";
@@ -37,6 +38,7 @@ import { localizeHtml, dictionary } from "./lib/i18n.js";
 
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC_DIR = join(HERE, "public");
+const WHATSAPP_BRIDGE_PATH = "/api/save-chat";
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -204,6 +206,7 @@ export function createApp(options = {}) {
     "/api/auth/mfa": { max: 20, window: 600_000 },
     "/api/auth/login": { max: 12, window: 600_000 },
     "/api/track-event": { max: 300, window: 3600_000 },
+    [WHATSAPP_BRIDGE_PATH]: { max: 60, window: 60_000 },
     "/api/client/auth/register": { max: 8, window: 3600_000 },
     "/api/client/auth/verify": { max: 10, window: 600_000 },
     "/api/client/auth/resend": { max: 5, window: 3600_000 },
@@ -263,6 +266,7 @@ export function createApp(options = {}) {
 
   router.get('/api/whatsapp/webhook', WHATSAPP.verifyWebhook);
   router.post('/api/whatsapp/webhook', api(WHATSAPP.receiveWebhook));
+  router.post(WHATSAPP_BRIDGE_PATH, api(saveChat, { limit: WHATSAPP_BRIDGE_PATH }));
   router.post('/api/requests', api(API.createRequestApi, { limit: '/api/requests' }));
   router.post('/api/admin/requests', api(API.createInternalRequest, { action: 'requests:write', limit: '/api/requests' }));
   router.post('/api/track', api(API.trackRequest, { limit: '/api/track' }));
@@ -597,7 +601,10 @@ export function createApp(options = {}) {
           const requestOrigin = new URL(`${secure ? 'https' : 'http'}://${req.headers.host}`).origin;
           sameOrigin = supplied.origin === origin && (origin === new URL(baseUrl).origin || origin === requestOrigin);
         } catch { /* Reject missing, null and malformed origins. */ }
-        if (!sameOrigin) {
+        // The bridge authenticates with a Bearer token independently of the session.
+        const extensionBridge = req.method === 'POST' && pathname === WHATSAPP_BRIDGE_PATH &&
+          (origin === undefined || /^chrome-extension:\/\/[a-p]{32}$/.test(origin));
+        if (!sameOrigin && !extensionBridge) {
           return json(res, 403, { ok: false, message: 'طلب غير مسموح' });
         }
       }

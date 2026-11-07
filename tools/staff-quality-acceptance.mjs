@@ -111,7 +111,7 @@ try{
   await section(page,'reports','[data-rp-filters]');await scan(page,'reports');
   await section(page,'systemHealth','[data-health-refresh]');await scan(page,'system-health');
   assert.ok((await page.locator('#view').innerText()).includes('لا دليل هنا على نسخة دورية'));
-  const health=await page.request.get(base+'/api/admin/system-health');assert.equal(health.status(),200);assert.equal((await health.json()).database.schemaVersion,8);metrics.health=true;
+  const health=await page.request.get(base+'/api/admin/system-health');assert.equal(health.status(),200);assert.equal((await health.json()).database.schemaVersion,9);metrics.health=true;
   await page.waitForFunction(()=>!document.querySelector('#toastStack')?.children.length,undefined,{timeout:8000});
   await page.screenshot({path:join(out,'system-health-desktop.png'),fullPage:true});
   const transitions=[];

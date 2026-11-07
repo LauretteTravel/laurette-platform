@@ -44,7 +44,7 @@ test('phase6 health requires independent capability, organization scope, complet
 });
 test('phase6 health returns bounded operational facts without private paths, endpoints, contents or errors',async()=>{
   const r=await call(owner);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');
-  assert.equal(r.data.database.schemaVersion,8);assert.equal(r.data.database.recordedMigrations,8);assert.equal(r.data.database.fullIntegrityChecked,false);
+  assert.equal(r.data.database.schemaVersion,9);assert.equal(r.data.database.recordedMigrations,9);assert.equal(r.data.database.fullIntegrityChecked,false);
   assert.deepEqual(r.data.n8n.queue.states,{delivered:1,failed:1});
   assert.equal(r.data.files.imports.states.failed,1);assert.equal(r.data.n8n.liveConnectionVerified,false);assert.equal(r.data.n8n.configured,false);
   assert.equal(r.data.backups.restoreVerified,false);assert.equal(r.data.backups.scheduledBackupVerified,false);

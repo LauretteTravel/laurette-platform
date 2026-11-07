@@ -714,7 +714,7 @@ test("4 migration6 to7 retains every historical cell and frozen checksum, restor
   raw.exec(readFileSync("tests/fixtures/pre-identity-crm.sql", "utf8"));
   raw.close();
   let upgraded = openDb(file);
-  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(upgraded.prepare("PRAGMA user_version").get().user_version, 9);
   const backup = upgraded.migrationBackups[6];
   raw = new DatabaseSync(backup, { readOnly: true });
   assert.equal(raw.prepare("PRAGMA user_version").get().user_version, 6);
@@ -749,7 +749,7 @@ test("4 migration6 to7 retains every historical cell and frozen checksum, restor
       sourceFile: backup,
       privateRoot: realpathSync("data/phase1b-testing"),
     });
-  assert.equal(result.candidateVersion, 8);
+  assert.equal(result.candidateVersion, 9);
   assert.equal(result.sourceVersion, 6);
   assert.equal(result.migrationSnapshots, 2);
   assert.equal(result.isolatedRestoreExact, true);

@@ -170,7 +170,7 @@ test("2B migration upgrades v2 with a restorable private snapshot and preserves 
   raw.close();
   let migrated = openDb(file);
   const backup = migrated.migrationBackups[2];
-  assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 8);
+  assert.equal(migrated.prepare("PRAGMA user_version").get().user_version, 9);
   migrated.close();
   const restored = path();
   copyFileSync(backup, restored);
@@ -183,7 +183,7 @@ test("2B migration upgrades v2 with a restorable private snapshot and preserves 
     profiles = raw.prepare("SELECT * FROM employees").all();
   raw.close();
   migrated = openDb(restored);
-  assert.equal(migrated.migrationBackups.length, 6);
+  assert.equal(migrated.migrationBackups.length, 7);
   assert.deepEqual(
     migrated
       .prepare(
