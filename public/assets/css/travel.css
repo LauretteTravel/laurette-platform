@@ -139,3 +139,73 @@ html[dir=ltr] .luxury-home .hero::after { background: linear-gradient(to right, 
   font: inherit; font-size: .8rem; background: #152624e0; color: white; cursor: pointer;
 }
 .hero-location button[aria-pressed=true] { background: var(--gold); color: var(--ink); }
+
+/* Hajj season hero and published offers */
+.hajj-home .hajj-hero { background: #142b29; }
+.hajj-home .hajj-hero .hero-poster, .hajj-home .hajj-hero .hero-video { object-position: center 55%; }
+.hajj-home .hajj-hero::after {
+  z-index: 1;
+  background: linear-gradient(0deg, #0b2322ef, #10272791 55%, #182c2866);
+  pointer-events: none;
+}
+.hajj-home .hajj-hero .hero-inner {
+  display: grid;
+  align-items: center;
+  gap: clamp(28px, 4vw, 58px);
+  padding-block: clamp(35px, 6vw, 92px);
+}
+.hajj-home .hajj-hero h1 { font-size: clamp(2.75rem, 6vw, 5.35rem); }
+.hajj-home .hajj-hero .hero-copy { min-width: 0; }
+.hajj-home .hajj-hero .hero-label { color: #f3d69c; }
+.hajj-video-toggle {
+  margin-block-start: 15px; padding: 6px 13px; min-height: 42px; border: 1px solid #ffffff75;
+  border-radius: 50px; color: #fff; background: #102727c7; font: inherit; font-size: .8rem; cursor: pointer;
+}
+.hajj-video-toggle::before { content: '▶'; margin-inline-end: .6em; }
+.hajj-video-toggle[aria-pressed=true]::before { content: 'Ⅱ'; }
+.hajj-home .hero-search-wrap { margin-block-start: 28px; }
+.hajj-home .home-umrah .split { padding-block: clamp(24px, 4vw, 54px); }
+.hero-offers { min-width: 0; }
+.hajj-home #offers.hero-offers { background: transparent; }
+.hero-offers-heading { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; margin-block-end: 12px; }
+.hero-offers-heading h2 { font-size: clamp(1.2rem, 2vw, 1.55rem); color: white; margin: 0; }
+.hero-offers-heading a { color: #f3d69c; flex: none; font-size: .85rem; }
+.hero-offers .empty { color: var(--ink); }
+
+.offers-viewport { overflow: auto hidden; scrollbar-width: thin; touch-action: pan-y pinch-zoom; }
+.offers-carousel:has(.offers-controls:not([hidden])) .offers-viewport { scrollbar-width: none; }
+.offers-carousel:has(.offers-controls:not([hidden])) .offers-viewport::-webkit-scrollbar { display: none; }
+.offers-track { display: flex; align-items: stretch; gap: 14px; }
+.offers-track > .poster-card {
+  flex: 0 0 min(78%, 255px);
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: 7px; cursor: grab;
+}
+.offers-track > .poster-card:active { cursor: grabbing; }
+.offers-track .poster-media { box-shadow: none; border-radius: 13px; }
+.offers-track .poster-card:hover .poster-media { transform: none; box-shadow: none; }
+.offers-track .poster-body { flex: 1; padding: 6px; }
+.offers-track .poster-body .btn-row { margin-block-start: auto; }
+.offers-track .poster-price { background: var(--gold); color: var(--ink); }
+.offers-carousel-compact .offers-track > .poster-card { flex-basis: clamp(156px, 43%, 224px); }
+.offers-carousel-compact .poster-media { aspect-ratio: 4 / 4.8; }
+.offers-carousel-compact .poster-body { padding: 4px 6px 8px; }
+.offers-carousel-compact .poster-sub { -webkit-line-clamp: 1; }
+.offers-carousel-compact .poster-body .btn { padding-inline: 8px; }
+.hajj-home .hajj-hero .poster-body .btn-ghost { background: #f8f5ef; color: var(--navy); border-color: var(--line-strong); }
+.offers-controls { display: flex; justify-content: center; gap: 9px; margin-block-start: 14px; }
+.offers-controls button {
+  display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line-strong);
+  border-radius: 50%; background: var(--sand); color: var(--navy); font: inherit; cursor: pointer;
+}
+.offers-controls button:hover, .offers-controls button[aria-pressed=true] { background: var(--gold); color: var(--ink); }
+html[dir=ltr] .offers-controls button[data-carousel-step] svg { transform: scaleX(-1); }
+
+@media (min-width: 850px) {
+  .hajj-home .hajj-hero .hero-inner { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+}
+@media (max-width: 650px) {
+  .hajj-home .hajj-hero .hero-inner { padding-block-start: 115px; }
+  .hajj-home .hajj-hero .hero-poster, .hajj-home .hajj-hero .hero-video { object-position: 48% center; }
+  .hajj-home .hajj-hero .hero-sub { margin-block-end: 16px; }
+}

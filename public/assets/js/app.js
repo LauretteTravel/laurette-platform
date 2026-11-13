@@ -840,6 +840,106 @@
     SoundKit.click();
   }, { passive: true });
 
+
+  /* ---------------- published offers carousel ---------------- */
+  const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  $$('[data-offers-carousel]').forEach((carousel) => {
+    const viewport = $('.offers-viewport', carousel);
+    const track = $('.offers-track', carousel);
+    const controls = $('.offers-controls', carousel);
+    if (!controls) return;
+
+    const auto = $('[data-carousel-auto]', controls);
+    const rtl = getComputedStyle(track).direction === 'rtl';
+    let playing = !motionPreference.matches;
+    let inView = false;
+    let animating = false;
+    let gesture;
+    let suppressClickUntil = 0;
+
+    function setPlaying(value) {
+      playing = value;
+      auto.setAttribute('aria-pressed', String(value));
+      auto.firstElementChild.textContent = value ? 'Ⅱ' : '▶';
+    }
+
+    async function move(step) {
+      if (animating || viewport.scrollWidth <= viewport.clientWidth + 1) return;
+      const { firstElementChild: first, lastElementChild: last } = track;
+      const card = step > 0 ? first : last;
+      const distance = (card.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap)) * (rtl ? 1 : -1);
+      animating = true;
+      if (step < 0) track.prepend(last);
+      viewport.scrollLeft = 0;
+      try {
+        const from = step > 0 ? 0 : distance;
+        const to = step > 0 ? distance : 0;
+        await track.animate(
+          [{ transform: 'translateX(' + from + 'px)' }, { transform: 'translateX(' + to + 'px)' }],
+          { duration: motionPreference.matches ? 0 : 340, easing: 'ease-out' },
+        ).finished;
+        if (step > 0) track.append(first);
+      } finally {
+        animating = false;
+      }
+    }
+
+    const updateControls = () => {
+      controls.hidden = viewport.scrollWidth <= viewport.clientWidth + 1;
+    };
+    new ResizeObserver(updateControls).observe(viewport);
+    updateControls();
+    setPlaying(playing);
+    motionPreference.addEventListener('change', (event) => {
+      if (event.matches) setPlaying(false);
+    });
+    new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; }).observe(viewport);
+    setInterval(() => {
+      if (playing && inView && !document.hidden && !carousel.matches(':hover, :focus-within') && !gesture && !viewport.scrollLeft) move(1);
+    }, 4600);
+
+    controls.addEventListener('click', (event) => {
+      const step = event.target.closest('[data-carousel-step]');
+      if (step) {
+        setPlaying(false);
+        move(Number(step.dataset.carouselStep));
+      } else if (event.target.closest('[data-carousel-auto]')) {
+        setPlaying(!playing);
+      }
+    });
+    viewport.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || event.target !== viewport) return;
+      event.preventDefault();
+      setPlaying(false);
+      move((event.key === 'ArrowLeft') === rtl ? 1 : -1);
+    });
+
+    viewport.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary || event.button !== 0 || controls.hidden) return;
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      event.target.setPointerCapture(event.pointerId);
+    });
+    viewport.addEventListener('pointerup', (event) => {
+      if (gesture?.id !== event.pointerId) return;
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      gesture = null;
+      if (Math.abs(dx) < 28 || Math.abs(dx) < Math.abs(dy)) return;
+      suppressClickUntil = performance.now() + 400;
+      setPlaying(false);
+      move((dx > 0) === rtl ? 1 : -1);
+    });
+    viewport.addEventListener('pointercancel', () => { gesture = null; });
+    viewport.addEventListener('dragstart', (event) => event.preventDefault());
+    viewport.addEventListener('click', (event) => {
+      if (event.detail && performance.now() < suppressClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }, true);
+  });
+
+
   /* ---------------- optional hero video ---------------- */
   const heroVideo = $('#heroVideo');
   const heroVideoToggle = $('#heroVideoToggle');
@@ -849,11 +949,7 @@
       heroVideo.classList.remove('is-ready');
       heroVideoToggle.setAttribute('aria-pressed', 'false');
     };
-    heroVideoToggle.addEventListener('click', async () => {
-      if (heroVideoToggle.getAttribute('aria-pressed') === 'true') {
-        stopVideo();
-        return;
-      }
+    const playVideo = async () => {
       heroVideoToggle.setAttribute('aria-pressed', 'true');
       if (!heroVideo.hasAttribute('src')) {
         heroVideo.poster = heroVideo.dataset.poster;
@@ -865,7 +961,14 @@
       } catch {
         if (heroVideo.paused) stopVideo();
       }
+    };
+    heroVideoToggle.addEventListener('click', () => {
+      if (heroVideoToggle.getAttribute('aria-pressed') === 'true') stopVideo();
+      else playVideo();
     });
+    if (heroVideo.hasAttribute('data-autoplay') && !motionPreference.matches && !navigator.connection?.saveData) playVideo();
+    motionPreference.addEventListener('change', (event) => { if (event.matches) stopVideo(); });
+    heroVideo.addEventListener('error', stopVideo);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) stopVideo();
     });
