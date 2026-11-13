@@ -214,6 +214,8 @@ html[dir=ltr] .cinematic-home .travel-hero .hero-inner { justify-content: flex-e
   .cinematic-home .travel-hero::after {
     background: linear-gradient(0deg, #072a24f7 7%, #072a24bc 44%, #072a2430 100%);
   }
+  .cinematic-home .travel-hero .hero-poster,
+  .cinematic-home .travel-hero .hero-video { object-position: 23% center; }
   .cinematic-home .travel-hero .hero-sub { font-size: .93rem; }
   .cinematic-home .offers-track > .poster-card { flex-basis: calc(100% - 15% - 14px); }
   .hero-video-controls { bottom: 47px; }
