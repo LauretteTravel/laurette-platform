@@ -1,0 +1,141 @@
+/* Public travel pages. Staff and account workspaces use their own styles. */
+body:has(.contact-strip), .luxury-home {
+  --navy: #064B49;
+  --navy-2: #073B39;
+  --blue: #17615C;
+  --blue-soft: #E6F0EB;
+  --gold: #C9A45C;
+  --gold-2: #E0C78D;
+  --gold-soft: #F3E8D1;
+  --sand: #F8F5EF;
+  --ink: #202B2A;
+  --muted: #536461;
+  --line: #DFE4DC;
+  --line-strong: #B7C7BD;
+  --radius-lg: 18px;
+  background: var(--sand);
+}
+
+.contact-strip { background: #073B39; color: #fff; font-size: .75rem; }
+.contact-strip-inner { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px 24px; padding-block: 5px; }
+.contact-strip-inner span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.contact-strip svg, .contact-strip a { color: #F1D9A6; }
+.site-header:has(.contact-strip) { background: var(--sand); }
+.site-header:has(.contact-strip) .header-inner { gap: 12px; }
+.site-header:has(.contact-strip) .main-nav a { color: var(--navy); padding-inline: 7px; font-size: .85rem; }
+.site-header:has(.contact-strip) .main-nav a[aria-current=page] { box-shadow: inset 0 -2px var(--gold); }
+body:has(.contact-strip) .site-footer { background: #073B39; }
+body:has(.contact-strip) .btn-gold { background: var(--gold); color: #202B2A; }
+
+.luxury-home .ticker { background: var(--sand); }
+.luxury-home .ticker a { color: var(--navy); }
+.luxury-home .hero { border-radius: 0; }
+.luxury-home .hero-art { mask-image: none; opacity: 1; }
+.luxury-home .hero-art img { opacity: 1; object-position: 50% 44%; }
+.luxury-home .hero::after { background: linear-gradient(to left, #102727 1%, #102727db 26%, #10272736 66%, transparent 95%); }
+html[dir=ltr] .luxury-home .hero::after { background: linear-gradient(to right, #102727 1%, #102727db 26%, #10272736 66%, transparent 95%); }
+.luxury-home .hero-inner { padding-block: clamp(64px, 9vw, 132px) 116px; }
+.luxury-home .hero-copy { max-width: 600px; }
+.hero-label { display: block; color: #F1D9A6; font-weight: 750; margin-block-end: 14px; }
+.luxury-home .hero h1 { font-size: clamp(2.55rem, 6vw, 5.25rem); line-height: 1.15; letter-spacing: 0; }
+.luxury-home .hero h1 em { display: block; }
+.luxury-home .hero-sub { max-width: 52ch; color: white; }
+.luxury-home .hero .btn-ghost { background: #112826a8; border-color: #ffffff8c; color: white; }
+.hero-location { position: absolute; inset-inline: 0; inset-block-end: 68px; z-index: 3; text-align: end; }
+.hero-location a { display: inline-block; background: #152624e0; color: #fff; border-radius: 30px; padding: 4px 13px; font-size: .8rem; }
+
+.luxury-home .hero-search-wrap { margin-block-start: -47px; }
+.luxury-home .search-card {
+  padding: clamp(16px, 3vw, 32px); margin: 0;
+  background: var(--navy); color: white;
+  border: 1px solid #ffffff26;
+  box-shadow: 0 18px 42px #173d3029;
+}
+.luxury-home .search-card h2 { color: white; margin-block-end: 14px; }
+.luxury-home .service-tabs { scrollbar-width: thin; border-block-end: 1px solid #ffffff36; }
+.luxury-home .service-tabs::-webkit-scrollbar { display: block; height: 5px; }
+.luxury-home .service-tab { color: white; min-block-size: 44px; }
+.luxury-home .service-tab[aria-selected=true], .luxury-home .search-panel .btn-primary { background: var(--gold); color: var(--ink); }
+.luxury-home .service-tab:hover:not([aria-selected=true]) { background: #ffffff24; }
+.luxury-home .search-panel { padding-inline: 0; }
+.luxury-home .search-field label { color: #fff; font-size: .8rem; }
+.luxury-home .search-field :is(input, select) { background-color: #fff; min-width: 0; }
+.luxury-home .search-panel .btn { min-block-size: 46px; }
+
+.luxury-home .section { padding-block: clamp(38px, 6vw, 84px); }
+.luxury-home .section:not(.section-ink) .eyebrow { color: var(--navy); }
+.luxury-home .section-head h2 { font-size: clamp(1.8rem, 3vw, 2.8rem); }
+.luxury-home #offers { background: #fffdf8; }
+.luxury-home #offers .poster-grid { grid-template-columns: repeat(auto-fit, minmax(min(245px, 100%), 1fr)); }
+.luxury-home .poster-card, .branch-card {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: 0 8px 20px #173d3010;
+}
+.luxury-home .poster-card { padding: 8px; gap: 5px; }
+.luxury-home .poster-media { border-radius: 13px; box-shadow: none; }
+.luxury-home .poster-card:hover .poster-media { transform: none; box-shadow: none; }
+.luxury-home .poster-price { background: var(--gold); color: var(--ink); }
+.luxury-home .poster-body { padding: 10px; flex: 1; }
+.luxury-home .poster-body .btn-row { margin-block-start: auto; padding-block-start: 4px; }
+
+.luxury-home .service-photo { display: grid; gap: 0; padding: 0; overflow: hidden; border-radius: var(--radius-lg); grid-template-rows: auto 1fr; }
+.service-photo > img { width: 100%; height: auto; aspect-ratio: 16 / 8; object-fit: cover; }
+.service-photo-copy { display: grid; align-content: start; gap: 5px; padding: 0 18px 18px; }
+.service-photo-copy .service-icon { margin-block-start: -20px; position: relative; border: 2px solid white; background: var(--gold-soft); color: var(--navy); }
+.service-photo-copy b { font-size: 1.1rem; }
+.luxury-home .home-umrah { background: #073B39; padding-block: 0; }
+.home-umrah .split { padding: clamp(22px, 5vw, 72px); background: linear-gradient(#07312ee6, #07312ebd), url('/media/hero/dest-makkah.jpg') center 52% / cover; }
+.home-umrah-programs .service-tile { overflow-wrap: anywhere; }
+.branch-card { display: flex; align-items: flex-start; gap: 16px; padding: 22px; }
+.branch-card p { margin-block-end: 6px; }
+.branch-card a { display: inline-block; font-weight: 750; }
+
+.luxury-home :focus-visible { outline: 3px solid #9B670C; outline-offset: 3px; }
+.luxury-home :is(.hero, .search-card, .site-footer) :focus-visible { outline-color: #F4D596; }
+.luxury-home .float-actions { inset-inline-start: auto; inset-inline-end: 12px; align-items: flex-end; }
+.luxury-home .float-actions .fab { width: 46px; height: 46px; padding: 0; border-radius: 50%; justify-content: center; }
+.luxury-home .float-actions .fab span { display: none; }
+.luxury-home .sound-toggle { inset-inline-start: 12px; inset-inline-end: auto; }
+
+@media (max-width: 1320px) {
+  .site-header:has(.contact-strip) .nav-toggle { display: grid; place-items: center; }
+  .site-header:has(.contact-strip) .main-nav { display: none; }
+  .site-header:has(.contact-strip) .main-nav.is-open {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+    position: absolute; inset-inline: 0; inset-block-start: 100%;
+    max-block-size: 60dvh; overflow: auto; margin: 0; padding: 14px;
+    background: var(--sand); box-shadow: var(--shadow-md);
+  }
+  .site-header:has(.contact-strip) .header-actions { margin-inline-start: auto; }
+}
+
+@media (max-width: 650px) {
+  .site-header:has(.contact-strip) .header-inner { gap: 6px; width: calc(100% - 20px); }
+  .site-header:has(.contact-strip) .header-actions { gap: 4px; }
+  .site-header:has(.contact-strip) .brand-logo { height: 30px; }
+  .site-header:has(.contact-strip) .header-actions .btn { padding-inline: 6px; font-size: .69rem; }
+  .site-header:has(.contact-strip) .nav-toggle { width: 36px; height: 38px; flex: none; }
+  .luxury-home .hero::after, html[dir=ltr] .luxury-home .hero::after { background: linear-gradient(0deg, #0c241f 4%, #0c241fe0 34%, #0c241f40 81%, #0c241f20); }
+  .luxury-home .hero-inner { padding-block: 155px 100px; }
+  .luxury-home .hero h1 { font-size: clamp(2rem, 8vw, 3.2rem); }
+  .luxury-home .hero .btn { min-block-size: 44px; padding: 8px 12px; font-size: .85rem; }
+  .hero-location { inset-block-end: 55px; }
+  .luxury-home .hero-search-wrap { margin-block-start: -32px; }
+  .luxury-home .search-panel { grid-template-columns: 1fr; }
+  .luxury-home .float-actions { flex-direction: row; inset-block-end: max(8px, env(safe-area-inset-bottom)); }
+  .luxury-home .site-footer { padding-block-end: 72px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .luxury-home *, .luxury-home *::before, .luxury-home *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+.luxury-home .hero-art img { object-position: 50% 62%; }
+.hero-location button {
+  border: 1px solid #ffffff8c; border-radius: 30px; padding: 4px 13px;
+  font: inherit; font-size: .8rem; background: #152624e0; color: white; cursor: pointer;
+}
+.hero-location button[aria-pressed=true] { background: var(--gold); color: var(--ink); }

@@ -170,15 +170,15 @@ test('الصفحة الرئيسية تعرض العروض بالبوسترات �
   assert.doesNotMatch(payload, /class="header-phone" href="tel:\+962791193888"/);
 });
 
-test('الواجهة تحمّل فيديو خلفيًا كسولاً مع صورة غلاف وأشكال متحركة', async () => {
+test('الواجهة تعرض كابادوكيا وتحمّل الفيديو عند طلب المستخدم', async () => {
   const { payload } = await call('/');
   assert.match(payload, /id="heroVideo"/);
   assert.match(payload, /preload="none"/);
   assert.match(payload, /data-src="\/media\/hero\/hero-loop\.mp4"/);
   assert.match(payload, /data-poster="\/media\/hero\/hero-poster\.jpg"/);
   assert.match(payload, /class="hero-poster"/);
-  assert.ok((payload.match(/class="blob blob-/g) || []).length >= 3);
-  assert.match(payload, /class="hero-ring"/);
+  assert.match(payload, /srcset="\/media\/hero\/cappadocia-mobile\.webp"/);
+  assert.match(payload, /id="heroVideoToggle"[^>]*aria-pressed="false"/);
   assert.match(payload, /id="soundToggle"/);
   assert.match(payload, /id="soundToggle"[^>]*aria-pressed="true"/);
   // لا يُطلب الفيديو من الخادم قبل تفعيله بالجافاسكربت

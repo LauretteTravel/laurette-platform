@@ -641,7 +641,7 @@
     if (!waModal) return;
     if (offerDialogEl && offerDialogEl.open) offerDialogEl.close();
     const message = (text || waDefaultText).trim();
-    $('[data-wa-direct], [data-wa-number]', waModal).forEach((a) => {
+    $$('[data-wa-direct], [data-wa-number]', waModal).forEach((a) => {
       a.href = `https://wa.me/${a.dataset.waNumber}?text=${encodeURIComponent(message)}`;
     });
     waModal.hidden = false;
@@ -840,47 +840,35 @@
     SoundKit.click();
   }, { passive: true });
 
-  /* ---------------- lazy hero video (poster first, video on demand) ---------------- */
+  /* ---------------- optional hero video ---------------- */
   const heroVideo = $('#heroVideo');
-  if (heroVideo) {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const conn = navigator.connection || {};
-    const saveData = conn.saveData === true || /(^|-)2g$/.test(conn.effectiveType || '');
-    if (reduceMotion || saveData) {
-      heroVideo.remove();
-    } else {
-      const startVideo = () => {
-        if (!heroVideo.src) {
-          heroVideo.poster = heroVideo.dataset.poster || '';
-          heroVideo.src = heroVideo.dataset.src;
-          heroVideo.load();
-        }
-        const playing = heroVideo.play();
-        if (playing && playing.catch) playing.catch(() => {});
-      };
-      heroVideo.addEventListener('loadeddata', () => heroVideo.classList.add('is-ready'), { once: true });
-      if ('IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) startVideo();
-            else heroVideo.pause();
-          });
-        }, { rootMargin: '240px 0px' });
-        io.observe(heroVideo);
-        // Fallback for environments where IO callbacks are throttled or unavailable.
-        setTimeout(() => {
-          const rect = heroVideo.getBoundingClientRect();
-          if (rect.top < window.innerHeight + 320 && rect.bottom > -320) startVideo();
-        }, 1200);
-      } else {
-        startVideo();
+  const heroVideoToggle = $('#heroVideoToggle');
+  if (heroVideo && heroVideoToggle) {
+    const stopVideo = () => {
+      heroVideo.pause();
+      heroVideo.classList.remove('is-ready');
+      heroVideoToggle.setAttribute('aria-pressed', 'false');
+    };
+    heroVideoToggle.addEventListener('click', async () => {
+      if (heroVideoToggle.getAttribute('aria-pressed') === 'true') {
+        stopVideo();
+        return;
       }
-      document.addEventListener('visibilitychange', () => {
-        if (!heroVideo.src) return;
-        if (document.hidden) heroVideo.pause();
-        else heroVideo.play().catch(() => {});
-      });
-    }
+      heroVideoToggle.setAttribute('aria-pressed', 'true');
+      if (!heroVideo.hasAttribute('src')) {
+        heroVideo.poster = heroVideo.dataset.poster;
+        heroVideo.src = heroVideo.dataset.src;
+      }
+      try {
+        await heroVideo.play();
+        if (!heroVideo.paused) heroVideo.classList.add('is-ready');
+      } catch {
+        if (heroVideo.paused) stopVideo();
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stopVideo();
+    });
   }
 
   /* ---------------- misc ---------------- */
