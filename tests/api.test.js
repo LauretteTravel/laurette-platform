@@ -77,7 +77,7 @@ after(async () => {
 test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّمة', async () => {
   const { res, payload } = await call('/');
   assert.equal(res.status, 200);
-  assert.match(payload, /العالم بين يديك/);
+  assert.match(payload, /<h1 id="travel-hero-title">العالم بين يديك/);
   assert.match(payload, /<link rel="canonical"/);
   assert.match(payload, /application\/ld\+json/);
   assert.match(payload, /TravelAgency/);
@@ -170,21 +170,27 @@ test('الصفحة الرئيسية تعرض العروض بالبوسترات �
   assert.doesNotMatch(payload, /class="header-phone" href="tel:\+962791193888"/);
 });
 
-test('الواجهة تحمّل فيديو خلفيًا كسولاً مع صورة غلاف وأشكال متحركة', async () => {
+test('الواجهة تعرض فيديو لوريت وتضع العروض بعد مخطط الرحلة', async () => {
   const { payload } = await call('/');
   assert.match(payload, /id="heroVideo"/);
   assert.match(payload, /preload="none"/);
-  assert.match(payload, /data-src="\/media\/hero\/hero-loop\.mp4"/);
-  assert.match(payload, /data-poster="\/media\/hero\/hero-poster\.jpg"/);
-  assert.match(payload, /class="hero-poster"/);
-  assert.ok((payload.match(/class="blob blob-/g) || []).length >= 3);
-  assert.match(payload, /class="hero-ring"/);
+  assert.match(payload, /data-src="\/media\/hero\/laurette-travel\.mp4"/);
+  assert.match(payload, /poster="\/media\/hero\/laurette-travel-poster\.webp"/);
+  assert.match(payload, /class="hero-art hero-poster"/);
+  assert.match(payload, /href="\/consult">اطلب رحلتك/);
+  assert.match(payload, /href="\/consult\?topic=umrah"/);
+  assert.match(payload, /data-offers-carousel/);
+  assert.ok(payload.indexOf('id="services"') < payload.indexOf('id="offers"'));
+  assert.ok(payload.indexOf('id="offers"') < payload.indexOf('id="hajj"'));
+  assert.match(payload, /id="heroMuteToggle"/);
+  assert.match(payload, /id="heroVideoToggle"[^>]*aria-pressed="false"/);
   assert.match(payload, /id="soundToggle"/);
   assert.match(payload, /id="soundToggle"[^>]*aria-pressed="true"/);
   // لا يُطلب الفيديو من الخادم قبل تفعيله بالجافاسكربت
   const videoTag = payload.match(/<video[^>]*>/)[0];
   assert.ok(!/\ssrc="/.test(videoTag), 'video should not have a direct src');
   assert.match(videoTag, /muted/);
+  assert.match(videoTag, /autoplay/);
   assert.match(videoTag, /playsinline/);
 });
 

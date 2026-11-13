@@ -641,7 +641,7 @@
     if (!waModal) return;
     if (offerDialogEl && offerDialogEl.open) offerDialogEl.close();
     const message = (text || waDefaultText).trim();
-    $('[data-wa-direct], [data-wa-number]', waModal).forEach((a) => {
+    $$('[data-wa-direct], [data-wa-number]', waModal).forEach((a) => {
       a.href = `https://wa.me/${a.dataset.waNumber}?text=${encodeURIComponent(message)}`;
     });
     waModal.hidden = false;
@@ -840,47 +840,151 @@
     SoundKit.click();
   }, { passive: true });
 
-  /* ---------------- lazy hero video (poster first, video on demand) ---------------- */
-  const heroVideo = $('#heroVideo');
-  if (heroVideo) {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const conn = navigator.connection || {};
-    const saveData = conn.saveData === true || /(^|-)2g$/.test(conn.effectiveType || '');
-    if (reduceMotion || saveData) {
-      heroVideo.remove();
-    } else {
-      const startVideo = () => {
-        if (!heroVideo.src) {
-          heroVideo.poster = heroVideo.dataset.poster || '';
-          heroVideo.src = heroVideo.dataset.src;
-          heroVideo.load();
-        }
-        const playing = heroVideo.play();
-        if (playing && playing.catch) playing.catch(() => {});
-      };
-      heroVideo.addEventListener('loadeddata', () => heroVideo.classList.add('is-ready'), { once: true });
-      if ('IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) startVideo();
-            else heroVideo.pause();
-          });
-        }, { rootMargin: '240px 0px' });
-        io.observe(heroVideo);
-        // Fallback for environments where IO callbacks are throttled or unavailable.
-        setTimeout(() => {
-          const rect = heroVideo.getBoundingClientRect();
-          if (rect.top < window.innerHeight + 320 && rect.bottom > -320) startVideo();
-        }, 1200);
-      } else {
-        startVideo();
-      }
-      document.addEventListener('visibilitychange', () => {
-        if (!heroVideo.src) return;
-        if (document.hidden) heroVideo.pause();
-        else heroVideo.play().catch(() => {});
-      });
+
+  /* ---------------- published offers carousel ---------------- */
+  const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
+  $$('[data-offers-carousel]').forEach((carousel) => {
+    const viewport = $('.offers-viewport', carousel);
+    const track = $('.offers-track', carousel);
+    const controls = $('.offers-controls', carousel);
+    $$('img', track).forEach((image) => {
+      const classify = () => image.classList.toggle('offer-landscape', image.naturalWidth > image.naturalHeight);
+      image.addEventListener('load', classify);
+      if (image.complete) classify();
+    });
+    if (!controls) return;
+
+    const auto = $('[data-carousel-auto]', controls);
+    const rtl = getComputedStyle(track).direction === 'rtl';
+    let playing = !motionPreference.matches;
+    let inView = false;
+    let animating = false;
+    let gesture;
+    let suppressClickUntil = 0;
+
+    function setPlaying(value) {
+      playing = value;
+      auto.setAttribute('aria-pressed', String(value));
+      auto.firstElementChild.textContent = value ? 'Ⅱ' : '▶';
     }
+
+    async function move(step) {
+      if (animating || viewport.scrollWidth <= viewport.clientWidth + 1) return;
+      const { firstElementChild: first, lastElementChild: last } = track;
+      const card = step > 0 ? first : last;
+      const distance = (card.getBoundingClientRect().width + parseFloat(getComputedStyle(track).columnGap)) * (rtl ? 1 : -1);
+      animating = true;
+      if (step < 0) track.prepend(last);
+      viewport.scrollLeft = 0;
+      try {
+        const from = step > 0 ? 0 : distance;
+        const to = step > 0 ? distance : 0;
+        await track.animate(
+          [{ transform: 'translateX(' + from + 'px)' }, { transform: 'translateX(' + to + 'px)' }],
+          { duration: motionPreference.matches ? 0 : 340, easing: 'ease-out' },
+        ).finished;
+        if (step > 0) track.append(first);
+      } finally {
+        animating = false;
+      }
+    }
+
+    const updateControls = () => {
+      controls.hidden = viewport.scrollWidth <= viewport.clientWidth + 1;
+    };
+    new ResizeObserver(updateControls).observe(viewport);
+    updateControls();
+    setPlaying(playing);
+    motionPreference.addEventListener('change', (event) => {
+      if (event.matches) setPlaying(false);
+    });
+    new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; }).observe(viewport);
+    setInterval(() => {
+      if (playing && inView && !document.hidden && !carousel.matches(':hover, :focus-within') && !gesture && !viewport.scrollLeft) move(1);
+    }, 5000);
+
+    controls.addEventListener('click', (event) => {
+      const step = event.target.closest('[data-carousel-step]');
+      if (step) {
+        setPlaying(false);
+        move(Number(step.dataset.carouselStep));
+      } else if (event.target.closest('[data-carousel-auto]')) {
+        setPlaying(!playing);
+      }
+    });
+    viewport.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || event.target !== viewport) return;
+      event.preventDefault();
+      setPlaying(false);
+      move((event.key === 'ArrowLeft') === rtl ? 1 : -1);
+    });
+
+    viewport.addEventListener('pointerdown', (event) => {
+      if (!event.isPrimary || event.button !== 0 || controls.hidden) return;
+      gesture = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      event.target.setPointerCapture(event.pointerId);
+    });
+    viewport.addEventListener('pointerup', (event) => {
+      if (gesture?.id !== event.pointerId) return;
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      gesture = null;
+      if (Math.abs(dx) < 28 || Math.abs(dx) < Math.abs(dy)) return;
+      suppressClickUntil = performance.now() + 400;
+      setPlaying(false);
+      move((dx > 0) === rtl ? 1 : -1);
+    });
+    viewport.addEventListener('pointercancel', () => { gesture = null; });
+    viewport.addEventListener('dragstart', (event) => event.preventDefault());
+    viewport.addEventListener('click', (event) => {
+      if (event.detail && performance.now() < suppressClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }, true);
+  });
+
+
+  /* ---------------- optional hero video ---------------- */
+  const heroVideo = $('#heroVideo');
+  const heroVideoToggle = $('#heroVideoToggle');
+  const heroMuteToggle = $('#heroMuteToggle');
+  if (heroVideo && heroVideoToggle && heroMuteToggle) {
+    const syncPlayback = () => {
+      heroVideoToggle.setAttribute('aria-pressed', String(!heroVideo.paused));
+      heroVideoToggle.textContent = heroVideo.paused ? '▶' : 'Ⅱ';
+    };
+    const playVideo = async () => {
+      if (!heroVideo.hasAttribute('src')) heroVideo.src = heroVideo.dataset.src;
+      try {
+        await heroVideo.play();
+      } catch {
+        syncPlayback();
+      }
+    };
+    heroVideo.addEventListener('playing', () => {
+      heroVideo.classList.add('is-ready');
+      syncPlayback();
+    });
+    heroVideo.addEventListener('pause', syncPlayback);
+    heroVideo.addEventListener('error', () => {
+      heroVideo.classList.remove('is-ready');
+      syncPlayback();
+    });
+    heroVideoToggle.addEventListener('click', () => {
+      if (heroVideo.paused) playVideo();
+      else heroVideo.pause();
+    });
+    heroMuteToggle.addEventListener('click', () => {
+      heroVideo.muted = !heroVideo.muted;
+      heroMuteToggle.setAttribute('aria-pressed', String(!heroVideo.muted));
+      heroMuteToggle.textContent = heroVideo.muted ? '🔇' : '🔊';
+    });
+    if (!motionPreference.matches && !navigator.connection?.saveData) playVideo();
+    motionPreference.addEventListener('change', (event) => { if (event.matches) heroVideo.pause(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) heroVideo.pause();
+    });
   }
 
   /* ---------------- misc ---------------- */
