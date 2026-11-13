@@ -77,7 +77,7 @@ after(async () => {
 test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّمة', async () => {
   const { res, payload } = await call('/');
   assert.equal(res.status, 200);
-  assert.match(payload, /العالم بين يديك/);
+  assert.match(payload, /<h1>رحلة إلى الحرمين<\/h1>/);
   assert.match(payload, /<link rel="canonical"/);
   assert.match(payload, /application\/ld\+json/);
   assert.match(payload, /TravelAgency/);
@@ -170,14 +170,16 @@ test('الصفحة الرئيسية تعرض العروض بالبوسترات �
   assert.doesNotMatch(payload, /class="header-phone" href="tel:\+962791193888"/);
 });
 
-test('الواجهة تعرض كابادوكيا وتحمّل الفيديو عند طلب المستخدم', async () => {
+test('الواجهة تعرض صورة الحرم وتفعّل فيديو الموسم الصامت مع أزرار الطلب', async () => {
   const { payload } = await call('/');
   assert.match(payload, /id="heroVideo"/);
   assert.match(payload, /preload="none"/);
-  assert.match(payload, /data-src="\/media\/hero\/hero-loop\.mp4"/);
-  assert.match(payload, /data-poster="\/media\/hero\/hero-poster\.jpg"/);
-  assert.match(payload, /class="hero-poster"/);
-  assert.match(payload, /srcset="\/media\/hero\/cappadocia-mobile\.webp"/);
+  assert.match(payload, /data-autoplay data-src="\/media\/hero\/hajj-season\.mp4"/);
+  assert.match(payload, /data-poster="\/media\/hero\/hajj-poster\.webp"/);
+  assert.match(payload, /class="hero-art hero-poster"/);
+  assert.match(payload, /href="\/umrah#custom"/);
+  assert.match(payload, /href="\/consult\?topic=umrah"/);
+  assert.match(payload, /data-offers-carousel/);
   assert.match(payload, /id="heroVideoToggle"[^>]*aria-pressed="false"/);
   assert.match(payload, /id="soundToggle"/);
   assert.match(payload, /id="soundToggle"[^>]*aria-pressed="true"/);
