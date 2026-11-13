@@ -847,6 +847,11 @@
     const viewport = $('.offers-viewport', carousel);
     const track = $('.offers-track', carousel);
     const controls = $('.offers-controls', carousel);
+    $$('img', track).forEach((image) => {
+      const classify = () => image.classList.toggle('offer-landscape', image.naturalWidth > image.naturalHeight);
+      image.addEventListener('load', classify);
+      if (image.complete) classify();
+    });
     if (!controls) return;
 
     const auto = $('[data-carousel-auto]', controls);
@@ -896,7 +901,7 @@
     new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; }).observe(viewport);
     setInterval(() => {
       if (playing && inView && !document.hidden && !carousel.matches(':hover, :focus-within') && !gesture && !viewport.scrollLeft) move(1);
-    }, 4600);
+    }, 5000);
 
     controls.addEventListener('click', (event) => {
       const step = event.target.closest('[data-carousel-step]');
@@ -943,34 +948,42 @@
   /* ---------------- optional hero video ---------------- */
   const heroVideo = $('#heroVideo');
   const heroVideoToggle = $('#heroVideoToggle');
-  if (heroVideo && heroVideoToggle) {
-    const stopVideo = () => {
-      heroVideo.pause();
-      heroVideo.classList.remove('is-ready');
-      heroVideoToggle.setAttribute('aria-pressed', 'false');
+  const heroMuteToggle = $('#heroMuteToggle');
+  if (heroVideo && heroVideoToggle && heroMuteToggle) {
+    const syncPlayback = () => {
+      heroVideoToggle.setAttribute('aria-pressed', String(!heroVideo.paused));
+      heroVideoToggle.textContent = heroVideo.paused ? '▶' : 'Ⅱ';
     };
     const playVideo = async () => {
-      heroVideoToggle.setAttribute('aria-pressed', 'true');
-      if (!heroVideo.hasAttribute('src')) {
-        heroVideo.poster = heroVideo.dataset.poster;
-        heroVideo.src = heroVideo.dataset.src;
-      }
+      if (!heroVideo.hasAttribute('src')) heroVideo.src = heroVideo.dataset.src;
       try {
         await heroVideo.play();
-        if (!heroVideo.paused) heroVideo.classList.add('is-ready');
       } catch {
-        if (heroVideo.paused) stopVideo();
+        syncPlayback();
       }
     };
-    heroVideoToggle.addEventListener('click', () => {
-      if (heroVideoToggle.getAttribute('aria-pressed') === 'true') stopVideo();
-      else playVideo();
+    heroVideo.addEventListener('playing', () => {
+      heroVideo.classList.add('is-ready');
+      syncPlayback();
     });
-    if (heroVideo.hasAttribute('data-autoplay') && !motionPreference.matches && !navigator.connection?.saveData) playVideo();
-    motionPreference.addEventListener('change', (event) => { if (event.matches) stopVideo(); });
-    heroVideo.addEventListener('error', stopVideo);
+    heroVideo.addEventListener('pause', syncPlayback);
+    heroVideo.addEventListener('error', () => {
+      heroVideo.classList.remove('is-ready');
+      syncPlayback();
+    });
+    heroVideoToggle.addEventListener('click', () => {
+      if (heroVideo.paused) playVideo();
+      else heroVideo.pause();
+    });
+    heroMuteToggle.addEventListener('click', () => {
+      heroVideo.muted = !heroVideo.muted;
+      heroMuteToggle.setAttribute('aria-pressed', String(!heroVideo.muted));
+      heroMuteToggle.textContent = heroVideo.muted ? '🔇' : '🔊';
+    });
+    if (!motionPreference.matches && !navigator.connection?.saveData) playVideo();
+    motionPreference.addEventListener('change', (event) => { if (event.matches) heroVideo.pause(); });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) stopVideo();
+      if (document.hidden) heroVideo.pause();
     });
   }
 
