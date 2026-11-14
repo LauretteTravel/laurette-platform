@@ -77,7 +77,17 @@ after(async () => {
 test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّمة', async () => {
   const { res, payload } = await call('/');
   assert.equal(res.status, 200);
-  assert.match(payload, /<h1 id="travel-hero-title">العالم بين يديك/);
+  assert.match(payload, /<title>لوريت للسياحة والسفر \| برامج سياحية، حج وعمرة، تذاكر وتأشيرات في الأردن<\/title>/);
+  assert.match(payload, /<h1 id="travel-hero-title">العالم بين يديك\.\.\. <em>/);
+  assert.doesNotMatch(payload, /class="hero-brand-glow"/);
+  assert.match(payload, /<a href="tel:027244112" dir="ltr">02-7244112<\/a>/);
+  assert.match(payload, /<a href="tel:064600777" dir="ltr">06-4600777<\/a>/);
+  const nav = payload.match(/<nav class="main-nav"[^>]*>([\s\S]*?)<\/nav>/)[1];
+  const dropdown = nav.match(/<details class="nav-dropdown">([\s\S]*?)<\/details>/)[0];
+  assert.deepEqual([...dropdown.matchAll(/href="([^"]+)"/g)].map((link) => link[1]), ['/destinations', '/guide', '/jordan']);
+  assert.deepEqual([...nav.replace(dropdown, '').matchAll(/href="([^"]+)"/g)].map((link) => link[1]),
+    ['/', '/offers', '/programs', '/umrah', '/flights', '/hotels', '/visa']);
+  assert.match(payload, /class="header-actions">\s*<a[^>]*href="\/account">حسابي<\/a>/);
   assert.match(payload, /<link rel="canonical"/);
   assert.match(payload, /application\/ld\+json/);
   assert.match(payload, /TravelAgency/);

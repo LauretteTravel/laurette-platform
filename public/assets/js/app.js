@@ -101,15 +101,30 @@
   const toggle = $('#navToggle');
   const nav = $('#mainNav');
   if (toggle && nav) {
-    toggle.addEventListener('click', () => {
-      const open = nav.classList.toggle('is-open');
+    const dropdown = $('.nav-dropdown', nav);
+    const setDrawerOpen = (open) => {
+      nav.classList.toggle('is-open', open);
       toggle.setAttribute('aria-expanded', String(open));
       toggle.setAttribute('aria-label', open ? 'إغلاق القائمة' : 'فتح القائمة');
-    });
+      if (!open && dropdown) dropdown.open = false;
+    };
+    toggle.addEventListener('click', () => setDrawerOpen(!nav.classList.contains('is-open')));
     nav.addEventListener('click', (e) => {
-      if (e.target.closest('a')) {
-        nav.classList.remove('is-open');
-        toggle.setAttribute('aria-expanded', 'false');
+      if (e.target.closest('a')) setDrawerOpen(false);
+    });
+    if (dropdown) {
+      document.addEventListener('click', (e) => {
+        if (dropdown.open && !dropdown.contains(e.target)) dropdown.open = false;
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (dropdown?.open) {
+        dropdown.open = false;
+        dropdown.querySelector('summary').focus();
+      } else if (nav.classList.contains('is-open')) {
+        setDrawerOpen(false);
+        toggle.focus();
       }
     });
   }
