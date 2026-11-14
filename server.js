@@ -15,6 +15,7 @@ import { ASSET_V, trackingFlags } from './lib/views/layout.js';
 import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
 import * as API from './lib/api.js';
+import { mountWorkspace } from './lib/workspace.js';
 import * as CLIENT_API from './lib/client-api.js';
 import * as WHATSAPP from './lib/whatsapp.js';
 import { COOKIE } from './lib/api.js';
@@ -73,6 +74,7 @@ export function createApp(options = {}) {
 
   const limiter = new RateLimiter();
   const router = createRouter();
+  mountWorkspace(router, db);
   const startedAt = Date.now();
   const whatsappWorker = WHATSAPP.whatsappNotificationsReady()
     ? setInterval(() => {
