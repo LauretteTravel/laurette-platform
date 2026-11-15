@@ -181,6 +181,7 @@
     {id:'voucherArchive',label:'القسائم المؤرشفة',icon:'▣',permission:'vouchers:read'},
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
+    { id: 'program-inquiries', label: 'استفسارات الفنادق والعروض', icon: '✉', permission: 'requests:read' },
     { id: 'brochures', label: 'كتيبات السفر PDF', icon: '▤', permission: 'programs:write' },
     { id: 'programs', label: 'البرامج', icon: '✈', permission: 'programs:read' },
     { id: 'content', label: 'المحتوى والعروض', icon: '✎', permission: 'content:write' },
@@ -201,7 +202,7 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'brochures', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'program-inquiries', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'brochures', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'program-inquiries', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -226,7 +227,7 @@
           <span class="brand-text"><b>لوريت</b><span>لوحة الإدارة</span></span>
         </a>
         <nav aria-label="أقسام نظام الموظفين"><ul class="admin-nav">
-          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" ${state.section === s.id ? 'aria-current="page"' : ''} class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : ''}</button></li>`).join('')}
+          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" ${state.section === s.id ? 'aria-current="page"' : ''} class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : s.id === 'program-inquiries' ? '<span class="count" data-inquiry-count aria-label="الاستفسارات الجديدة">0</span>' : ''}</button></li>`).join('')}
         </ul></nav>
         <div class="admin-account">
           <div style="margin-bottom:8px">${esc(state.user.name)} · ${esc(state.user.roleName || { admin: 'مدير', manager: 'مدير قسم', agent: 'موظف' }[state.user.role] || state.user.role)}</div>
@@ -342,6 +343,16 @@
     loadSection({ focus: true });
   }
 
+  function setInquiryCount(count) {
+    const badge = $('[data-inquiry-count]');
+    if (badge) badge.textContent = num(count);
+  }
+
+  function refreshInquiryCount() {
+    if (!$('[data-inquiry-count]')) return;
+    void api('/api/admin/inquiries?count=1').then(result => setInquiryCount(result.new_count)).catch(() => {});
+  }
+
   async function loadSection({ focus = false } = {}) {
     window.EmployeeWorkspace?.destroy();
     workspaceShell();
@@ -354,6 +365,11 @@
     const map = {
       overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
+      'program-inquiries': async () => {
+        const { mountProgramInquiriesAdmin } = await import('/assets/js/program-inquiry-admin.js');
+        const isActive = () => state.section === 'program-inquiries' && view.isConnected;
+        if (isActive()) await mountProgramInquiriesAdmin(view, { api, isActive, setCount: setInquiryCount, canWrite: hasPermission('requests:write') });
+      },
       brochures: async () => {
         try {
           const { mountBrochureAdmin } = await import('/assets/js/brochure-admin.js');
@@ -628,10 +644,16 @@
   function startNotifications() {
     clearInterval(notificationTimer);
     notificationTimer = null;
-    if (!hasPermission("tasks:read")) return;
-    $("#staffNotifications")?.addEventListener("click", () => openNotifications());
-    updateNotificationCount();
-    notificationTimer = setInterval(updateNotificationCount, 60000);
+    const taskAlerts = hasPermission("tasks:read");
+    if (!taskAlerts && !$('[data-inquiry-count]')) return;
+    if (taskAlerts) $("#staffNotifications")?.addEventListener("click", () => openNotifications());
+    const refresh = () => {
+      if (document.hidden) return;
+      if (taskAlerts) updateNotificationCount();
+      refreshInquiryCount();
+    };
+    refresh();
+    notificationTimer = setInterval(refresh, 60000);
   }
   async function openNotifications(page = 1) {
     try {

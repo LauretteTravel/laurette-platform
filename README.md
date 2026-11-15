@@ -372,3 +372,18 @@ node server.js              # البذر التلقائي عند أول تشغي
 - المتغيرات: N8N_BOOKING_WEBHOOK_URL, N8N_BOOKING_WEBHOOK_SECRET, N8N_BOOKING_TIMEOUT_MS (اختياري).
 - الـworkflow الجاهز: integrations/n8n/laurette-booking-workflow.json.
 - الدليل الكامل (SMTP + Render + اختبار): docs/n8n-smtp-setup.md.
+
+### Program and alternative hotel inquiries
+
+The public inquiry dialog saves the request before offering a WhatsApp link.
+The Admin section uses the existing request permissions and staff MFA.
+Organization-level staff can view all inquiries. Branch-level staff see only
+inquiries explicitly addressed to their branch. Requests without a preferred
+branch stay in the organization queue.
+
+To notify n8n, configure `N8N_INQUIRY_WEBHOOK_URL` as an HTTPS webhook on the
+server. For local development, place it in the ignored `.env` file and start
+the app with `node --env-file-if-exists=.env server.js`. The server sends a
+`program_inquiry.created` event with the saved inquiry including the contact
+details. Delivery is asynchronous with a five-second timeout. If delivery
+fails, the saved inquiry remains available in Admin.

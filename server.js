@@ -1,3 +1,4 @@
+import { mountProgramInquiries } from './lib/program-inquiries.js';
 import * as REPORTS from './lib/reports.js';
 import { createExchangeRateService } from './lib/exchange-rates.js';
 import { createSystemHealth, workerAttempt, workerFinished } from './lib/system-health.js';
@@ -200,6 +201,7 @@ export function createApp(options = {}) {
 
   /* ---------------- api ---------------- */
   const POST_LIMITS = {
+    "/api/inquiries": { max: 12, window: 3600_000 },
     "/api/requests": { max: 20, window: 3600_000 },
     "/api/track": { max: 30, window: 3600_000 },
     "/api/assistant": { max: 80, window: 3600_000 },
@@ -237,6 +239,7 @@ export function createApp(options = {}) {
   };
 
   mountBrochures(router, db, api);
+  mountProgramInquiries(router, api);
 
   router.post('/api/auth/login', api(API.login, { limit: '/api/auth/login' }));
   router.post(

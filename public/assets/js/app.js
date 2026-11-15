@@ -36,7 +36,7 @@
       return;
     }
     const link = event.target.closest('a[href]');
-    if (!link || link.target || link.hasAttribute('download') || link.dataset.noTransition !== undefined) return;
+    if (!link || link.target || link.hasAttribute('download') || link.dataset.noTransition !== undefined || link.matches('[data-program-inquiry],[data-program-details]')) return;
     const destination = new URL(link.href, window.location.href);
     if (destination.origin !== window.location.origin) return;
     if (destination.pathname === window.location.pathname
@@ -383,7 +383,8 @@
             <span class="card-kicker">${p.destination || ''}</span>
             <h3 class="card-title"><a href="${p.url}">${p.title}</a></h3>
             <div class="card-meta"><span>${p.days} أيام / ${p.nights} ليالٍ</span>${p.meals ? `<span>${p.meals}</span>` : ''}</div>
-            <div class="card-foot"><span class="price"><small>يبدأ من</small><b>${arNum(p.priceFrom)} ${p.currency}</b></span><a class="btn btn-quiet btn-sm" href="${p.url}">التفاصيل</a></div>
+            <div class="card-foot"><span class="price"><small>يبدأ من</small><b>${arNum(p.priceFrom)} ${p.currency}</b></span><a class="btn btn-quiet btn-sm" href="${p.url}" data-program-details>التفاصيل</a></div>
+            <a class="btn btn-sm pi-trigger" href="${p.url}#program-inquiry" data-program-inquiry>🏨 اطلب فندق آخر / استفسر</a>
           </div></article>`).join('')}</div>`;
       } catch {
         out.innerHTML = '<p class="form-status is-error">تعذر الترشيح الآن. حاول لاحقًا.</p>';
