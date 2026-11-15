@@ -84,7 +84,7 @@ test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّم�
   assert.match(payload, /<a href="tel:064600777" dir="ltr">06-4600777<\/a>/);
   const nav = payload.match(/<nav class="main-nav"[^>]*>([\s\S]*?)<\/nav>/)[1];
   const dropdown = nav.match(/<details class="nav-dropdown">([\s\S]*?)<\/details>/)[0];
-  assert.deepEqual([...dropdown.matchAll(/href="([^"]+)"/g)].map((link) => link[1]), ['/destinations', '/guide', '/jordan']);
+  assert.deepEqual([...dropdown.matchAll(/href="([^"]+)"/g)].map((link) => link[1]), ['/brochures', '/destinations', '/guide', '/jordan']);
   assert.deepEqual([...nav.replace(dropdown, '').matchAll(/href="([^"]+)"/g)].map((link) => link[1]),
     ['/', '/offers', '/programs', '/umrah', '/flights', '/hotels', '/visa']);
   assert.match(payload, /class="header-actions">\s*<a[^>]*href="\/account">حسابي<\/a>/);

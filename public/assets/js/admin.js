@@ -181,6 +181,7 @@
     {id:'voucherArchive',label:'القسائم المؤرشفة',icon:'▣',permission:'vouchers:read'},
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
+    { id: 'brochures', label: 'كتيبات السفر PDF', icon: '▤', permission: 'programs:write' },
     { id: 'programs', label: 'البرامج', icon: '✈', permission: 'programs:read' },
     { id: 'content', label: 'المحتوى والعروض', icon: '✎', permission: 'content:write' },
     { id: 'visa', label: 'التأشيرات', icon: '▤', permission: 'visa:write' },
@@ -200,7 +201,7 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'reports', 'customers', 'programs', 'brochures', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'followups', 'tasks', 'deadlines', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -353,6 +354,14 @@
     const map = {
       overview: renderOverview, requests: renderRequests, tasks: renderTasks, deadlines: renderDeadlines, followups: renderFollowUps, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
+      brochures: async () => {
+        try {
+          const { mountBrochureAdmin } = await import('/assets/js/brochure-admin.js');
+          if (state.section === 'brochures') await mountBrochureAdmin(view);
+        } catch (error) {
+          if (state.section === 'brochures') view.textContent = error.message;
+        }
+      },
       voucher: renderVoucher,
       voucherArchive: () => window.VoucherLedger.mount(view,{api,hasPermission,initialSearch:state.query.voucherSearch||''}),
       users: renderUsers, organization: renderOrganization, settings: renderSettings, audit: renderAudit, assistant: renderAssistant,

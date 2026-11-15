@@ -33,6 +33,7 @@ import * as STAFF from "./lib/staff-api.js";
 import * as STAFF_MFA from "./lib/staff-mfa.js";
 import { auditContext } from "./lib/audit-context.js";
 import { withApiAuthorization } from './lib/api-authorization.js';
+import { mountBrochures } from './lib/brochures.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
 import { localizeHtml, dictionary } from "./lib/i18n.js";
 
@@ -234,6 +235,8 @@ export function createApp(options = {}) {
     limited.requiredAction = action;
     return limited;
   };
+
+  mountBrochures(router, db, api);
 
   router.post('/api/auth/login', api(API.login, { limit: '/api/auth/login' }));
   router.post(
@@ -446,7 +449,7 @@ export function createApp(options = {}) {
   });
 
   router.get('/sitemap.xml', (ctx) => {
-    const urls = ['/', '/programs', '/offers', '/jordan', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
+    const urls = ['/', '/programs', '/offers', '/brochures', '/jordan', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
     const programs = q(db, "SELECT slug, updated_at FROM programs WHERE status IN ('published','sold_out')");
     const destinations = q(db, 'SELECT slug FROM destinations WHERE published = 1');
     const articles = q(db, "SELECT slug, updated_at FROM articles WHERE status = 'published'");
