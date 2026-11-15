@@ -15,6 +15,7 @@ import { ASSET_V, trackingFlags } from './lib/views/layout.js';
 import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
 import * as API from './lib/api.js';
+import { mountBrochures } from './lib/brochures.js';
 import { mountWorkspace } from './lib/workspace.js';
 import * as CLIENT_API from './lib/client-api.js';
 import * as WHATSAPP from './lib/whatsapp.js';
@@ -74,6 +75,7 @@ export function createApp(options = {}) {
 
   const limiter = new RateLimiter();
   const router = createRouter();
+  mountBrochures(router, db);
   mountWorkspace(router, db);
   const startedAt = Date.now();
   const whatsappWorker = WHATSAPP.whatsappNotificationsReady()
@@ -253,7 +255,7 @@ export function createApp(options = {}) {
   });
 
   router.get('/sitemap.xml', (ctx) => {
-    const urls = ['/', '/programs', '/offers', '/jordan', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
+    const urls = ['/', '/programs', '/offers', '/brochures', '/jordan', '/umrah', '/flights', '/hotels', '/visa', '/consult', '/destinations', '/guide', '/faq', '/about', '/news'];
     const programs = q(db, "SELECT slug, updated_at FROM programs WHERE status IN ('published','sold_out')");
     const destinations = q(db, 'SELECT slug FROM destinations WHERE published = 1');
     const articles = q(db, "SELECT slug, updated_at FROM articles WHERE status = 'published'");
