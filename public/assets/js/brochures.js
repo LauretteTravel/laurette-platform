@@ -1,0 +1,115 @@
+const grid = document.querySelector('#brochure-grid');
+const status = document.querySelector('#brochure-status');
+const more = document.querySelector('#brochure-more');
+const filters = document.querySelector('#brochure-filters');
+const tabs = document.querySelector('#brochure-categories');
+const dialog = document.querySelector('#brochure-preview');
+let category = '';
+let query = '';
+let page = 0;
+let pending;
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
+}
+
+function download(link, url) {
+  link.href = url;
+  link.download = '';
+  link.addEventListener('click', () => {
+    const original = 'تحميل البرنامج (PDF)';
+    link.textContent = 'جارٍ بدء التحميل…';
+    setTimeout(() => { link.textContent = original; }, 1300);
+  });
+}
+
+function preview(brochure) {
+  dialog.querySelector('h2').textContent = brochure.title;
+  const frame = dialog.querySelector('iframe');
+  frame.src = brochure.preview_url;
+  dialog.querySelector('[data-open]').href = brochure.preview_url;
+  const share = new URL('https://wa.me/');
+  share.searchParams.set('text', brochure.title + '\n' + new URL(brochure.download_url, location.origin).href);
+  dialog.querySelector('[data-share]').href = share;
+  dialog.querySelector('[data-download]').href = brochure.download_url;
+  dialog.showModal();
+}
+
+function card(brochure, categories) {
+  const article = element('article', 'bh-card');
+  const image = element('img', 'bh-cover');
+  image.src = brochure.cover_image_url || '/media/brand/og-default.jpg';
+  image.alt = '';
+  image.width = 640;
+  image.height = 360;
+  image.loading = 'lazy';
+  const body = element('div', 'bh-card-body');
+  body.append(element('span', 'bh-badge', categories[brochure.category]));
+  body.append(element('h2', '', brochure.title));
+  body.append(element('p', 'bh-muted', [brochure.destination, brochure.duration].filter(Boolean).join(' · ')));
+  const size = new Intl.NumberFormat('ar-JO', { maximumFractionDigits: 1 }).format(brochure.file_size / 1024);
+  body.append(element('p', 'bh-muted', 'PDF · ' + size + ' كيلوبايت'));
+  body.append(element('p', 'bh-price', brochure.starting_price ? 'ابتداءً من ' + brochure.starting_price : 'السعر عند الاستفسار'));
+  const actions = element('div', 'bh-card-actions');
+  const direct = element('a', 'btn btn-primary', 'تحميل البرنامج (PDF)');
+  download(direct, brochure.download_url);
+  const quick = element('button', 'btn btn-ghost', 'معاينة سريعة');
+  quick.type = 'button';
+  quick.addEventListener('click', () => preview(brochure));
+  actions.append(direct, quick);
+  body.append(actions);
+  article.append(image, body);
+  return article;
+}
+
+async function load(reset = false) {
+  pending?.abort();
+  const request = new AbortController();
+  pending = request;
+  if (reset) {
+    page = 0;
+    grid.replaceChildren();
+    more.hidden = true;
+  }
+  const params = new URLSearchParams({ category, q: query, page: page + 1 });
+  status.textContent = 'جارٍ تحميل الكتيبات…';
+  more.disabled = true;
+  try {
+    const response = await fetch('/api/brochures?' + params, { signal: request.signal });
+    if (!response.ok) throw new Error();
+    const result = await response.json();
+    if (request.signal.aborted) return;
+    grid.append(...result.brochures.map(brochure => card(brochure, result.categories)));
+    page = result.page;
+    more.hidden = !result.hasMore;
+    status.textContent = grid.childElementCount ? '' : 'لا توجد كتيبات مطابقة. جرّب تصنيفًا آخر أو كلمة بحث مختلفة.';
+  } catch {
+    if (request.signal.aborted) return;
+    const retry = element('button', 'btn btn-ghost', 'إعادة المحاولة');
+    retry.type = 'button';
+    retry.addEventListener('click', () => load());
+    status.replaceChildren(document.createTextNode('تعذّر تحميل الكتيبات. '), retry);
+  } finally {
+    if (pending === request) more.disabled = false;
+  }
+}
+
+filters.addEventListener('submit', event => {
+  event.preventDefault();
+  query = new FormData(filters).get('q').trim();
+  load(true);
+});
+tabs.addEventListener('click', event => {
+  const button = event.target.closest('[data-category]');
+  if (!button) return;
+  category = button.dataset.category;
+  for (const tab of tabs.children) tab.setAttribute('aria-pressed', String(tab === button));
+  load(true);
+});
+more.addEventListener('click', () => load());
+dialog.addEventListener('close', () => dialog.querySelector('iframe').removeAttribute('src'));
+download(dialog.querySelector('[data-download]'), '#');
+load(true);
