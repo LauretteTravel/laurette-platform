@@ -131,7 +131,6 @@ export function createApp(options = {}) {
   const limiter = new RateLimiter();
   const router = createRouter();
   const exchangeRates=createExchangeRateService({db,provider:options.exchangeRateProvider||null});
-  mountBrochures(router, db);
   const startedAt = Date.now();
   const whatsappEnabled = WHATSAPP.whatsappNotificationsReady();
   const workers = { deadlines: { scheduled: true, intervalSeconds: 60, running: false },
@@ -236,6 +235,8 @@ export function createApp(options = {}) {
     limited.requiredAction = action;
     return limited;
   };
+
+  mountBrochures(router, db, api);
 
   router.post('/api/auth/login', api(API.login, { limit: '/api/auth/login' }));
   router.post(

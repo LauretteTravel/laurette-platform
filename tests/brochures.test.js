@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { tokenHash } from '../lib/auth.js';
 import { createApp } from '../server.js';
 
 test('brochures require staff permission and support public search, ranges, download counts and removal', async () => {
@@ -25,6 +26,8 @@ test('brochures require staff permission and support public search, ranges, down
     assert.equal(page.status, 200);
     assert.match(await page.text(), /brochure-preview/);
     const admin = { cookie: await login('brochure-admin'), 'x-requested-with': 'fetch' };
+    assert.equal((await call('/api/admin/brochures', { headers: admin })).status, 403);
+    app.db.prepare('UPDATE sessions SET mfa_verified_at=? WHERE token_hash=?').run(new Date().toISOString(), tokenHash(admin.cookie.split('=')[1]));
     const agent = { cookie: await login('brochure-agent'), 'x-requested-with': 'fetch' };
     const form = (buffer, type = 'application/pdf') => {
       const data = new FormData();
