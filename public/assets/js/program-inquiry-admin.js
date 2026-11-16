@@ -41,17 +41,19 @@ export async function mountProgramInquiriesAdmin(view, { api, canWrite, setCount
     for (const inquiry of data.inquiries) {
       const row = rows.insertRow();
       row.insertCell().textContent = formatDate.format(new Date(inquiry.created_at));
-      row.insertCell().textContent = inquiry.customer_name;
+      row.insertCell().textContent = inquiry.customer_name || '—';
       const link = node('a', inquiry.customer_phone);
       link.href = 'https://wa.me/' + inquiry.customer_phone.replace(/\D/g, '');
       link.dir = 'ltr';
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      row.insertCell().append(link);
+      const contact = row.insertCell();
+      if (inquiry.customer_phone) contact.append(link);
+      else contact.textContent = '—';
       const program = row.insertCell();
       program.textContent = inquiry.program_title;
       if (inquiry.current_hotel) program.append(node('br'), node('small', inquiry.current_hotel));
-      row.insertCell().textContent = data.types[inquiry.inquiry_type] || inquiry.inquiry_type;
+      row.insertCell().textContent = inquiry.brochure_title ? 'استفسار من معاينة كتيب' : (data.types[inquiry.inquiry_type] || inquiry.inquiry_type);
       const notes = row.insertCell();
       notes.textContent = inquiry.requested_hotel_notes || '—';
       notes.style.cssText = 'min-width:12rem;white-space:pre-wrap;overflow-wrap:anywhere';

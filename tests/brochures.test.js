@@ -24,7 +24,9 @@ test('brochures require staff permission and support public search, ranges, down
   try {
     const page = await call('/brochures');
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /brochure-preview/);
+    const markup = await page.text();
+    assert.match(markup, /brochure-destinations/);
+    assert.match(markup, /brochure-inquiry/);
     const admin = { cookie: await login('brochure-admin'), 'x-requested-with': 'fetch' };
     assert.equal((await call('/api/admin/brochures', { headers: admin })).status, 403);
     app.db.prepare('UPDATE sessions SET mfa_verified_at=? WHERE token_hash=?').run(new Date().toISOString(), tokenHash(admin.cookie.split('=')[1]));
@@ -53,6 +55,26 @@ test('brochures require staff permission and support public search, ranges, down
     const listed = await (await call('/api/brochures?' + new URLSearchParams({ category: 'tourism', q: 'فيتنام' }))).json();
     assert.equal(listed.brochures[0].title, 'برنامج فيتنام');
     assert.equal((await call(brochure.cover_image_url)).headers.get('content-type'), 'image/png');
+    const map = async (query = '') => (await (await call('/api/brochures/map' + query)).json()).pins;
+    assert.equal((await map())[0].lowest_price_jod, 1249);
+    assert.deepEqual(await map('?category=flights'), []);
+    const filtered = await (await call('/api/brochures?' + new URLSearchParams({ destination: 'فيتنام' }))).json();
+    assert.deepEqual(filtered.brochures.map(row => row.id), [brochure.id]);
+    const submitInquiry = (message, phone) => call('/api/inquiries', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ brochure_id: brochure.id, brochure_title: 'forged', message, phone }),
+    });
+    assert.equal((await submitInquiry('  ')).status, 422);
+    assert.equal((await submitInquiry('هل الفندق مشمول؟', 'bad')).status, 422);
+    const inquiry = await submitInquiry('هل الفندق مشمول؟');
+    assert.equal(inquiry.status, 201);
+    assert.equal((await submitInquiry('موعد الرحلة؟', '0791234567')).status, 201);
+    const inquiryList = await (await call('/api/admin/inquiries', { headers: admin })).json();
+    assert.equal(inquiryList.new_count, 2);
+    assert.equal(inquiryList.inquiries[0].customer_phone, '+962791234567');
+    assert.equal(inquiryList.inquiries[1].customer_phone, '');
+    assert.equal(inquiryList.inquiries[1].brochure_title, brochure.title);
+    assert.equal(inquiryList.inquiries[1].brochure_id, brochure.id);
 
     const preview = await call(brochure.preview_url, { headers: { range: 'bytes=0-7' } });
     assert.equal(preview.status, 206);
@@ -77,10 +99,15 @@ test('brochures require staff permission and support public search, ranges, down
     assert.equal(seasonal.brochures[0].title, 'فيتنام الجديدة');
     assert.equal((await call(path + '/toggle', { method: 'PATCH', headers: admin })).status, 200);
     assert.equal((await call(brochure.download_url)).status, 404);
+    assert.deepEqual(await map(), []);
+    assert.equal((await submitInquiry('هل السعر شامل؟')).status, 404);
     assert.equal((await call(brochure.cover_image_url)).status, 404);
     assert.equal((await (await call('/api/brochures')).json()).brochures.length, 0);
     assert.equal((await call(path, { method: 'DELETE', headers: admin })).status, 200);
     assert.equal(app.db.prepare('SELECT COUNT(*) AS count FROM tour_brochure_files').get().count, 0);
+    const historical = app.db.prepare('SELECT brochure_id,brochure_title FROM program_inquiries ORDER BY id LIMIT 1').get();
+    assert.equal(historical.brochure_id, null);
+    assert.equal(historical.brochure_title, brochure.title);
   } finally {
     await app.close();
   }

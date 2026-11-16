@@ -1203,3 +1203,6 @@ html[dir="ltr"] .lang-switch[lang="ar"] { font-size: 17px; }
   body.print-catalog-page .catalog-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: A4; margin: 14mm; }
 }
+
+.bh-destination-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr)); gap:.55rem; border:1px solid #c8d8ca; border-radius:.7rem; margin:1rem 0; padding:.8rem; }
+.bh-destination-fields small { grid-column:1/-1; }

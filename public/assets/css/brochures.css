@@ -27,3 +27,80 @@
 .bh-dialog-head h2{margin:0;font-size:1.15rem;overflow-wrap:anywhere}
 .bh-dialog iframe{display:block;border:0;width:100%;height:clamp(15rem,68dvh,58rem);background:#e7edf2}
 @media(max-width:560px){.bh-dialog-actions>*{flex:1}.bh-dialog iframe{height:55dvh}.bh-card-actions{flex-direction:column}.bh-hero{background-position:60% center}}
+
+/* Destination map and brochure conversation */
+.bh-destinations {
+  margin-block:1.25rem;
+  border:1px solid var(--line);
+  border-radius:var(--radius-lg,18px);
+  padding:clamp(.7rem,2vw,1.25rem);
+  background:white;
+}
+.bh-globe-head h2 { color:var(--navy); margin:0 0 .65rem; font-size:clamp(1.2rem,2.5vw,1.55rem); }
+.bh-stage {
+  position:relative;
+  max-width:100%;
+  height:clamp(280px,47vw,470px);
+  overflow:hidden;
+  isolation:isolate;
+  border-radius:inherit;
+  background:radial-gradient(circle,var(--blue),var(--navy-2) 72%);
+}
+.bh-canvas,.bh-markers { position:absolute; inset:0; }
+.bh-canvas { touch-action:none; cursor:grab; }
+.bh-canvas:active { cursor:grabbing; }
+.bh-canvas canvas { display:block; width:100%; height:100%; }
+.bh-markers { pointer-events:none; }
+.bh-pin {
+  position:absolute; transform:translate(-50%,-50%);
+  pointer-events:auto; cursor:pointer; border:2px solid var(--gold-2);
+  border-radius:50%; background:var(--gold); color:var(--ink); padding:0;
+  width:28px; height:28px; font-family:inherit; font-weight:700; font-size:.75rem;
+  box-shadow:0 0 0 3px #062b28aa,0 0 15px var(--gold-2);
+}
+.bh-pin:is(:hover,:focus-visible) { z-index:3; }
+.bh-pin:is(:hover,:focus-visible)::after {
+  content:attr(data-label); position:absolute; top:100%; left:50%; transform:translateX(-50%);
+  width:max-content; max-width:min(15rem,55vw); text-align:start; margin-top:.4rem;
+  padding:.4rem .65rem; border-radius:.55rem; border:1px solid var(--gold);
+  background:var(--sand); color:var(--ink); pointer-events:none; font-size:.78rem; line-height:1.45;
+}
+.bh-map-controls { position:absolute; inset-inline-start:.55rem; bottom:.55rem; display:flex; gap:.3rem; z-index:5; }
+.bh-map-controls button,.bh-location,.bh-inquiry-chips button {
+  cursor:pointer; font:inherit; color:var(--navy); background:var(--sand);
+  border:1px solid var(--line-strong); border-radius:.65rem; min-height:44px; padding:.35rem .6rem;
+}
+.bh-map-controls button { min-width:44px; }
+.bh-location[aria-pressed=true],.bh-location:hover,.bh-inquiry-chips button:hover { background:var(--gold-soft); border-color:var(--gold); }
+.bh-destination-list,.bh-cluster>div,.bh-inquiry-chips { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.65rem; }
+.bh-cluster { margin-top:.65rem; padding:.6rem; border:1px solid var(--gold); border-radius:.65rem; }
+.bh-dialog { width:min(70rem,96vw); color:var(--ink); }
+.bh-dialog::backdrop { background:#073b39bb; }
+.bh-dialog-head { position:sticky; top:0; z-index:6; background:white; flex-wrap:nowrap; border-bottom:1px solid var(--line); }
+.bh-dialog-head h2,.bh-preview-inquiry h3 { color:var(--navy); }
+.bh-preview-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(15rem,19rem); }
+.bh-preview-document { min-width:0; }
+.bh-preview-document iframe { background:var(--blue-soft); }
+.bh-preview-inquiry { background:var(--sand); padding:1rem; border-inline-start:1px solid var(--line); }
+.bh-preview-inquiry h3 { margin:0; }
+.bh-preview-inquiry label { display:grid; gap:.25rem; margin-top:.65rem; }
+.bh-preview-inquiry :is(input,textarea) {
+  width:100%; min-width:0; background:white; padding:.55rem;
+  border:1px solid var(--line-strong); border-radius:.55rem; color:var(--ink); font:inherit;
+}
+.bh-inquiry-actions { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+.bh-inquiry-actions .btn { flex:1; }
+#bh-inquiry-status { margin:.4rem 0; color:var(--navy); }
+#bh-inquiry-status:empty { display:none; }
+@media(max-width:720px) {
+  .bh-preview-layout { grid-template-columns:minmax(0,1fr); }
+  .bh-preview-document iframe { height:clamp(13rem,41dvh,30rem); }
+  .bh-preview-inquiry { border-inline-start:0; border-top:1px solid var(--line); }
+}
+@media(max-width:480px) {
+  body:has(.brochures-hub) .travel-header .header-inner {
+    display:grid; grid-template-columns:auto minmax(0,1fr) auto; height:auto; padding-block:6px;
+  }
+  body:has(.brochures-hub) .travel-header .nav-toggle { grid-column:3; }
+  body:has(.brochures-hub) .travel-header .header-actions { grid-column:1/-1; flex-wrap:wrap; }
+}
