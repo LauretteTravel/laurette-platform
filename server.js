@@ -14,17 +14,20 @@ import { artSvg, ART_KEYS } from './lib/art.js';
 import { ASSET_V, trackingFlags } from './lib/views/layout.js';
 import { homePage, programsPage, programsPrintPage, programPage, umrahPage, hotelsPage, getSettings } from './lib/views/public.js';
 import { flightsPage, visaPage, consultPage, destinationsPage, destinationPage, guidePage, articlePage, faqPage, trackPage, aboutPage, privacyPage, newsPage, offlinePage, offersPage, jordanPage } from './lib/views/public2.js';
+import { offerMicroPage } from './lib/views/offer-micro.js';
 import * as API from './lib/api.js';
 import { mountBrochures } from './lib/brochures.js';
 import { mountWorkspace } from './lib/workspace.js';
 import * as CLIENT_API from './lib/client-api.js';
 import * as WHATSAPP from './lib/whatsapp.js';
+import { saveChat } from './lib/whatsapp-bridge.js';
 import { COOKIE } from './lib/api.js';
 import { customerAccountPage, customerProfilePage } from './lib/views/account.js';
 import { localizeHtml, dictionary } from './lib/i18n.js';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC_DIR = join(HERE, 'public');
+const WHATSAPP_BRIDGE_PATH = '/api/save-chat';
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -33,6 +36,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.pdf': 'application/pdf',
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
@@ -45,17 +49,17 @@ const MIME = {
 function localAdminPassword() {
   const credentialsFile = join(HERE, 'data', 'admin-credentials.txt');
   if (!existsSync(credentialsFile)) return null;
-  return readFileSync(credentialsFile, 'utf8').match(/كلمة المرور المؤقتة:\s*(\S+)/)?.[1] || null;
+  return readFileSync(credentialsFile, 'utf8').match(/ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø¤Ù‚ØªØ©:\s*(\S+)/)?.[1] || null;
 }
 
 function ensureAdminPassword() {
   const file = join(HERE, 'data', 'admin-credentials.txt');
   const generated = randomBytes(9).toString('base64url');
-  const body = `لوريت — بيانات دخول لوحة الإدارة\nاسم المستخدم: laurette\nكلمة المرور المؤقتة: ${generated}\nغيّرها بعد أول تسجيل دخول.\n`;
+  const body = `Ù„ÙˆØ±ÙŠØª â€” Ø¨ÙŠØ§Ù†Ø§Øª Ø¯Ø®ÙˆÙ„ Ù„ÙˆØ­Ø© Ø§Ù„Ø¥Ø¯Ø§Ø±Ø©\nØ§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…: laurette\nÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø¤Ù‚ØªØ©: ${generated}\nØºÙŠÙ‘Ø±Ù‡Ø§ Ø¨Ø¹Ø¯ Ø£ÙˆÙ„ ØªØ³Ø¬ÙŠÙ„ Ø¯Ø®ÙˆÙ„.\n`;
   try {
     mkdirSync(join(HERE, 'data'), { recursive: true });
     writeFileSync(file, body, 'utf8');
-    console.warn('[laurette] No ADMIN_PASSWORD found — generated a temporary one in data/admin-credentials.txt');
+    console.warn('[laurette] No ADMIN_PASSWORD found â€” generated a temporary one in data/admin-credentials.txt');
   } catch {
     console.warn('[laurette] No ADMIN_PASSWORD found and could not write data/admin-credentials.txt');
   }
@@ -126,6 +130,7 @@ export function createApp(options = {}) {
   router.get('/about', page(aboutPage));
   router.get('/privacy', page(privacyPage));
   router.get('/news', page(newsPage));
+  router.get('/p/:slug', page(offerMicroPage));
 
   /* ---------------- admin shell ---------------- */
   router.get('/admin', (ctx) => html(ctx.res, 200, adminShell(ctx), {
@@ -143,10 +148,13 @@ export function createApp(options = {}) {
     '/api/recommend': { max: 60, window: 3600_000 },
     '/api/auth/login': { max: 12, window: 600_000 },
     '/api/track-event': { max: 300, window: 3600_000 },
+    [WHATSAPP_BRIDGE_PATH]: { max: 60, window: 60_000 },
     '/api/client/auth/register': { max: 8, window: 3600_000 },
     '/api/client/auth/verify': { max: 10, window: 600_000 },
     '/api/client/auth/resend': { max: 5, window: 3600_000 },
     '/api/client/auth/login': { max: 12, window: 600_000 },
+    '/api/public/offer-lead': { max: 20, window: 3600000 },
+    '/api/inquiries': { max: 20, window: 3600000 },
   };
 
   const api = (handler, { auth = false, action = null, limit = null } = {}) => async (ctx) => {
@@ -156,12 +164,12 @@ export function createApp(options = {}) {
         const hit = limiter.hit(`${limit}|${ctx.ip}`, rule.max, rule.window);
         if (!hit.allowed) {
           ctx.res.setHeader('retry-after', String(hit.retryAfter));
-          return json(ctx.res, 429, { ok: false, message: 'عدد المحاولات كبير. حاول لاحقًا.' });
+          return json(ctx.res, 429, { ok: false, message: 'Ø¹Ø¯Ø¯ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø§Øª ÙƒØ¨ÙŠØ±. Ø­Ø§ÙˆÙ„ Ù„Ø§Ø­Ù‚Ù‹Ø§.' });
         }
       }
     }
-    if (auth && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'يلزم تسجيل الدخول' });
-    if (action && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'يلزم تسجيل الدخول' });
+    if (auth && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'ÙŠÙ„Ø²Ù… ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„' });
+    if (action && !ctx.user) return json(ctx.res, 401, { ok: false, message: 'ÙŠÙ„Ø²Ù… ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„' });
     return handler(ctx);
   };
 
@@ -182,6 +190,7 @@ export function createApp(options = {}) {
 
   router.get('/api/whatsapp/webhook', WHATSAPP.verifyWebhook);
   router.post('/api/whatsapp/webhook', api(WHATSAPP.receiveWebhook));
+  router.post(WHATSAPP_BRIDGE_PATH, api(saveChat, { limit: WHATSAPP_BRIDGE_PATH }));
   router.post('/api/requests', api(API.createRequestApi, { limit: '/api/requests' }));
   router.post('/api/admin/requests', api(API.createInternalRequest, { action: 'requests:write', limit: '/api/requests' }));
   router.post('/api/track', api(API.trackRequest, { limit: '/api/track' }));
@@ -190,9 +199,14 @@ export function createApp(options = {}) {
   router.post('/api/recommend', api(API.recommendApi, { limit: '/api/recommend' }));
   router.post('/api/assistant', api(API.assistantApi, { limit: '/api/assistant' }));
   router.post('/api/track-event', api(API.trackEvent, { limit: '/api/track-event' }));
+  router.post('/api/public/offer-lead', api(API.offerLeadApi, { limit: '/api/public/offer-lead' }));
+  router.post('/api/inquiries', api(API.createInquiryApi, { limit: '/api/inquiries' }));
 
   router.get('/api/admin/overview', api(API.overview, { action: 'overview:read' }));
   router.get('/api/admin/requests', api(API.listRequests, { action: 'requests:read' }));
+  router.get('/api/admin/inquiries', api(API.listInquiriesApi, { action: 'requests:read' }));
+  router.get('/api/admin/inquiries/count', api(API.inquiryCountsApi, { action: 'requests:read' }));
+  router.patch('/api/admin/inquiries/:id', api(API.updateInquiryApi, { action: 'requests:write' }));
   router.get('/api/admin/requests/:id', api(API.getRequest, { action: 'requests:read' }));
   router.patch('/api/admin/requests/:id', api(API.updateRequest, { action: 'requests:write' }));
   router.post('/api/admin/requests/:id/transfers', api(API.createRequestTransfer, { action: 'requests:write' }));
@@ -209,6 +223,7 @@ export function createApp(options = {}) {
     router.delete(`/api/admin/${resource}/:id`, (ctx) => API.deleteResource(ctx, resource));
   }
 
+  router.post('/api/admin/programs/:id/upload-brochure', api(API.uploadBrochureApi));
   router.get('/api/admin/users', api(API.listUsers, { action: 'users:write' }));
   router.post('/api/admin/users', api(API.createUser, { action: 'users:write' }));
   router.patch('/api/admin/users/:id', api(API.updateUser, { action: 'users:write' }));
@@ -286,8 +301,8 @@ export function createApp(options = {}) {
 
   router.get('/site.webmanifest', (ctx) => {
     const manifest = {
-      name: 'لوريت للسياحة والسفر',
-      short_name: 'لوريت',
+      name: 'Ù„ÙˆØ±ÙŠØª Ù„Ù„Ø³ÙŠØ§Ø­Ø© ÙˆØ§Ù„Ø³ÙØ±',
+      short_name: 'Ù„ÙˆØ±ÙŠØª',
       start_url: '/',
       display: 'standalone',
       background_color: '#FFFFFF',
@@ -384,8 +399,14 @@ export function createApp(options = {}) {
     };
 
     res.setHeader('x-request-id', randomBytes(6).toString('hex'));
+    const staticMedia = (req.method === 'GET' || req.method === 'HEAD') && pathname.startsWith('/media/');
     for (const [headerName, headerValue] of Object.entries(securityHeaders(nonce, secure, tracking))) {
-      res.setHeader(headerName, headerValue);
+      // عارض الكتالوج المدمج في /p/:slug يضمّن PDF من نفس الأصل: frame-ancestors 'self' على الوسائط فقط
+      if (staticMedia && headerName === 'content-security-policy') {
+        res.setHeader(headerName, String(headerValue).replace('frame-ancestors \'none\'', 'frame-ancestors \'self\''));
+      } else if (!(staticMedia && headerName === 'x-frame-options')) {
+        res.setHeader(headerName, headerValue);
+      }
     }
 
     if (req.method === 'GET' || req.method === 'HEAD') {
@@ -405,12 +426,15 @@ export function createApp(options = {}) {
         const requestedWith = req.headers['x-requested-with'];
         const origin = req.headers.origin;
         const sameOrigin = !origin || origin === baseUrl || (origin && req.headers.host && origin.endsWith(req.headers.host));
-        if (requestedWith !== 'fetch' && !sameOrigin) {
-          return json(res, 403, { ok: false, message: 'طلب غير مسموح' });
+        // The bridge uses its own Bearer credential and does not authenticate with cookies.
+        const extensionBridge = req.method === 'POST' && pathname === WHATSAPP_BRIDGE_PATH &&
+          /^chrome-extension:\/\/[a-p]{32}$/.test(origin || '');
+        if (requestedWith !== 'fetch' && !sameOrigin && !extensionBridge) {
+          return json(res, 403, { ok: false, message: 'Ø·Ù„Ø¨ ØºÙŠØ± Ù…Ø³Ù…ÙˆØ­' });
         }
       }
       const match = router.match(req.method, pathname);
-      if (!match) return json(res, 404, { ok: false, message: 'المسار غير موجود' });
+      if (!match) return json(res, 404, { ok: false, message: 'Ø§Ù„Ù…Ø³Ø§Ø± ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯' });
       ctx.params = match.params;
       try {
         const result = match.route.handler(ctx);
@@ -446,7 +470,7 @@ export function createApp(options = {}) {
     if (isApi) {
       return json(ctx.res, err.status || 500, {
         ok: false,
-        message: err.status ? err.message : 'حدث خطأ غير متوقع. حاول لاحقًا.',
+        message: err.status ? err.message : 'Ø­Ø¯Ø« Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹. Ø­Ø§ÙˆÙ„ Ù„Ø§Ø­Ù‚Ù‹Ø§.',
         ...(err.details ? { errors: err.details } : {}),
       });
     }
@@ -494,7 +518,7 @@ function adminShell(ctx) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0B2A43">
-<title>لوحة إدارة لوريت</title>
+<title>Ù„ÙˆØ­Ø© Ø¥Ø¯Ø§Ø±Ø© Ù„ÙˆØ±ÙŠØª</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" href="/assets/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin>
@@ -506,9 +530,9 @@ function adminShell(ctx) {
 </head>
 <body class="admin-body">
 <main id="adminRoot" aria-live="polite">
-  <div class="login-wrap"><div class="login-card"><h1>لوحة إدارة لوريت</h1><p class="muted">جارٍ التحميل…</p></div></div>
+  <div class="login-wrap"><div class="login-card"><h1>Ù„ÙˆØ­Ø© Ø¥Ø¯Ø§Ø±Ø© Ù„ÙˆØ±ÙŠØª</h1><p class="muted">Ø¬Ø§Ø±Ù Ø§Ù„ØªØ­Ù…ÙŠÙ„â€¦</p></div></div>
 </main>
-<noscript><p style="padding:24px">تحتاج إلى تفعيل JavaScript لاستخدام لوحة الإدارة.</p></noscript>
+<noscript><p style="padding:24px">ØªØ­ØªØ§Ø¬ Ø¥Ù„Ù‰ ØªÙØ¹ÙŠÙ„ JavaScript Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù… Ù„ÙˆØ­Ø© Ø§Ù„Ø¥Ø¯Ø§Ø±Ø©.</p></noscript>
 <script src="/assets/js/admin.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-generator.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
 <script src="/assets/js/voucher-studio.js?v=${ASSET_V}" nonce="${nonce}" defer></script>
@@ -525,17 +549,17 @@ if (isMain) {
     || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://${host}:${port}`);
   const app = createApp({ baseUrl });
   app.listen(port, host).then((addr) => {
-    console.log(`\n  لوريت — المنصة تعمل الآن`);
+    console.log(`\n  Ù„ÙˆØ±ÙŠØª â€” Ø§Ù„Ù…Ù†ØµØ© ØªØ¹Ù…Ù„ Ø§Ù„Ø¢Ù†`);
     console.log(`  http://${host}:${addr.port}`);
-    console.log(`  لوحة الإدارة: http://${host}:${addr.port}/admin`);
+    console.log(`  Ù„ÙˆØ­Ø© Ø§Ù„Ø¥Ø¯Ø§Ø±Ø©: http://${host}:${addr.port}/admin`);
     const credentialsFile = join(HERE, 'data', 'admin-credentials.txt');
     if (existsSync(credentialsFile)) {
-      console.log('  بيانات الدخول: data/admin-credentials.txt');
+      console.log('  Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¯Ø®ÙˆÙ„: data/admin-credentials.txt');
     } else if (process.env.ADMIN_PASSWORD) {
-      console.log('  كلمة مرور المدير مضبوطة عبر ADMIN_PASSWORD.');
+      console.log('  ÙƒÙ„Ù…Ø© Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø¯ÙŠØ± Ù…Ø¶Ø¨ÙˆØ·Ø© Ø¹Ø¨Ø± ADMIN_PASSWORD.');
     }
   }).catch((err) => {
-    console.error('فشل تشغيل الخادم:', err.message);
+    console.error('ÙØ´Ù„ ØªØ´ØºÙŠÙ„ Ø§Ù„Ø®Ø§Ø¯Ù…:', err.message);
     process.exit(1);
   });
 }

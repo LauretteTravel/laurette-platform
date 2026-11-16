@@ -1203,3 +1203,229 @@ html[dir="ltr"] .lang-switch[lang="ar"] { font-size: 17px; }
   body.print-catalog-page .catalog-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: A4; margin: 14mm; }
 }
+
+/* ===== OFFER MICRO PAGE (/p/:slug) ===== */
+/* قشرة صفحة العرض المستقلة — كل الأصناف مسبوقة .omp- ولا تلمس أي قاعدة موجودة. */
+
+body.omp-body { background: var(--sand); font-family: var(--font); }
+
+/* الشريط العلوي البسيط */
+.omp-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; background: var(--navy); color: #fff; padding: 12px clamp(14px, 3vw, 24px); }
+.omp-top-brand { color: #fff; font-weight: 800; font-size: 14px; line-height: 1.4; text-decoration: none; }
+.omp-top-brand:hover, .omp-top-brand:focus-visible { color: var(--gold-2); }
+.omp-official { display: inline-flex; align-items: center; gap: 6px; background: rgba(217, 163, 74, .18); color: var(--gold-2); border: 1px solid rgba(232, 185, 106, .45); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-weight: 800; white-space: nowrap; }
+.omp-top-home { margin-inline-start: auto; color: #fff; border: 1px solid rgba(255, 255, 255, .38); border-radius: 999px; padding: 6px 16px; font-size: 12.5px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.omp-top-home:hover, .omp-top-home:focus-visible { background: rgba(255, 255, 255, .12); }
+
+/* حاوية الصفحة — عرض أقصى 900px (سارٍ أيضاً من 1440px فأعلى) */
+.omp-page { max-width: 900px; margin-inline: auto; padding: 18px clamp(14px, 3vw, 24px) 48px; display: grid; gap: 16px; }
+
+/* شريط الاستشاري/الفرع */
+.omp-advisor { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; background: var(--paper); border: 1px solid var(--line); border-inline-start: 4px solid var(--gold); border-radius: var(--radius); padding: 12px 16px; box-shadow: var(--shadow-sm); }
+.omp-advisor-label { font-weight: 800; color: var(--navy); font-size: 14.5px; }
+.omp-advisor-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.omp-advisor-sub .omp-num { color: var(--navy); }
+.omp-num { font-weight: 800; letter-spacing: .02em; }
+.omp-advisor-actions { margin-inline-start: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+/* الـHero بالبوستر */
+.omp-hero { display: grid; gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: clamp(14px, 2.5vw, 22px); }
+.omp-poster { margin: 0; border: 2px solid var(--gold-2); border-radius: var(--radius); background: var(--navy); overflow: hidden; box-shadow: var(--shadow-md); }
+.omp-poster img { display: block; width: 100%; max-height: 560px; object-fit: contain; }
+.omp-poster-fallback { display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; min-height: 320px; padding: 24px; background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 55%, var(--blue) 110%); color: #fff; }
+.omp-poster-fallback b { font-size: 22px; line-height: 1.55; max-width: 34ch; }
+.omp-poster-fallback span { color: var(--gold-2); font-weight: 700; font-size: 13px; }
+.omp-title { margin: 0; font-size: clamp(21px, 3.2vw, 30px); line-height: 1.45; color: var(--navy); }
+.omp-duration { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 700; font-size: 14px; }
+.omp-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.omp-badge-price { display: inline-flex; align-items: center; background: linear-gradient(120deg, var(--gold), var(--gold-2)); color: #2A1B06; border-radius: 999px; padding: 8px 16px; font-weight: 800; font-size: 15px; box-shadow: 0 8px 22px rgba(217, 163, 74, .3); }
+.omp-note { margin: 0; font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+
+/* الشريط السفلي — صف inline داخل الـhero على الشاشات الكبيرة، وثابت أسفل الشاشة ≤860px */
+.omp-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-sm); }
+.omp-bar-price { display: flex; flex-direction: column; line-height: 1.3; margin-inline-end: auto; }
+.omp-bar-price small { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.omp-bar-price b { color: var(--navy); font-size: 16.5px; }
+@media (max-width: 860px) {
+  .omp-bar {
+    position: fixed; inset-inline: 0; bottom: 0; z-index: 70;
+    margin: 0; border: 0; border-block-start: 1px solid var(--line); border-radius: 0;
+    background: rgba(255, 255, 255, .97); backdrop-filter: blur(10px);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 30px rgba(11, 42, 67, .12);
+  }
+  .omp-bar .btn { padding-inline: 12px; }
+}
+
+/* الأقسام العامة */
+.omp-section { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: clamp(14px, 2.5vw, 22px); }
+.omp-section > h2 { margin: 0 0 6px; font-size: 20px; color: var(--navy); }
+.omp-muted { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.7; }
+
+/* بطاقات الأسعار — عمودان ≥861px وعمود واحد ≤860px */
+.omp-tiers { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 861px) { .omp-tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.omp-tier { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: linear-gradient(180deg, #fff 0%, var(--gold-soft) 140%); }
+.omp-tier-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.omp-tier-hotel { font-weight: 800; color: var(--navy); font-size: 16.5px; line-height: 1.5; }
+.omp-tier-stars { color: var(--gold); font-size: 14px; letter-spacing: .12em; white-space: nowrap; }
+.omp-tier-room { color: var(--blue); font-weight: 700; font-size: 13px; }
+.omp-tier-price { margin-top: 2px; }
+.omp-tier-price small { display: block; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.omp-tier-price b { font-size: clamp(20px, 3vw, 26px); font-weight: 900; color: var(--navy); letter-spacing: .01em; }
+.omp-tier-notes { margin: 0; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.omp-tier .btn-wa, .omp-submit { width: 100%; display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+
+/* خط السير القابل للطي */
+.omp-itin summary { cursor: pointer; font-weight: 800; color: var(--navy); font-size: 17px; user-select: none; }
+.omp-itin summary::marker { color: var(--gold); }
+.omp-itin[open] summary { margin-bottom: 12px; }
+.omp-itin .timeline { margin: 0; }
+
+/* الكتالوج PDF */
+.omp-catalog-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.omp-pdf-frame { width: 100%; height: 70vh; margin-top: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: #F2F5F8; }
+
+/* نموذج الطلب الرسمي */
+.omp-form { display: grid; gap: 12px; }
+.omp-form-grid { display: grid; grid-template-columns: 1fr; gap: 12px 14px; }
+@media (min-width: 620px) { .omp-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .omp-field-full { grid-column: 1 / -1; } }
+.omp-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.omp-field > span { font-size: 12.5px; font-weight: 700; color: #2B4358; }
+.omp-field .req { color: var(--danger); }
+.omp-input, .omp-select, .omp-textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+.omp-input:focus-visible, .omp-select:focus-visible, .omp-textarea:focus-visible { outline: 3px solid rgba(23, 99, 143, .3); outline-offset: 1px; border-color: var(--blue); }
+.omp-textarea { resize: vertical; min-height: 84px; }
+.omp-consent { margin-block: 2px 0; }
+.omp-submit:disabled { opacity: .65; cursor: progress; }
+
+/* بطاقة النجاح بعد الإرسال */
+.omp-success { display: grid; justify-items: center; gap: 10px; text-align: center; background: #E7F5EF; border: 1px solid rgba(30, 122, 95, .35); border-radius: var(--radius-lg); padding: clamp(16px, 3vw, 28px); }
+.omp-success h3 { margin: 0; color: var(--ok); font-size: 19px; }
+.omp-success .omp-muted { margin: 0; }
+.omp-ref { font-size: 21px; font-weight: 900; letter-spacing: .06em; color: var(--ok); background: #fff; border: 1px dashed rgba(30, 122, 95, .5); border-radius: 12px; padding: 8px 18px; }
+.omp-success-actions { justify-content: center; }
+
+/* دعم 390px و360px بحشوات مضبوطة */
+@media (max-width: 390px) {
+  .omp-top { padding: 10px 12px; gap: 6px 8px; }
+  .omp-top-brand { font-size: 12.5px; }
+  .omp-top-home { padding: 5px 12px; font-size: 11.5px; }
+  .omp-page { padding-inline: 12px; }
+  .omp-title { font-size: 20px; }
+  .omp-badge-price { font-size: 13.5px; padding: 6px 12px; }
+  .omp-bar-price b { font-size: 14.5px; }
+  .omp-tier-price b { font-size: 20px; }
+}
+@media (max-width: 360px) {
+  .omp-bar { gap: 6px; padding-inline: 10px; }
+  .omp-bar .btn { font-size: 12px; padding-inline: 9px; }
+  .omp-advisor-actions { margin-inline-start: 0; width: 100%; }
+}
+
+/* الحركة مخفوضة */
+@media (prefers-reduced-motion: reduce) {
+  .omp-bar, .omp-tier, .omp-badge-price { transition: none; animation: none; }
+}
+
+/* طباعة مقبولة */
+@media print {
+  body.omp-body { background: #fff; }
+  .omp-top-home, .omp-bar, .omp-advisor-actions, .omp-tier .btn-wa, .omp-catalog-actions, .omp-form, .omp-success-actions { display: none !important; }
+  .omp-page { max-width: none; padding: 0; gap: 10px; }
+  .omp-hero, .omp-section, .omp-tier, .omp-advisor { box-shadow: none; border-color: #cbd5dc; }
+  .omp-poster { box-shadow: none; }
+}
+
+/* ===================== HOTEL INQUIRY BOX (صندوق طلب فندق بديل) =====================
+   يُستخدم في بطاقات البرامج، لوحة صفحة البرنامج، نافذة العروض، وصفحة /p/:slug.
+   هوية لوريت: شفافية ذهبية + كحلي، بلا ألوان جديدة. */
+
+.btn-inquiry {
+  background: #fff; color: var(--navy); border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(217, 163, 74, .18);
+}
+.btn-inquiry:hover { background: var(--gold-soft); border-color: var(--gold); box-shadow: 0 10px 24px rgba(217, 163, 74, .22); }
+.btn-inquiry:focus-visible { outline: 3px solid rgba(217, 163, 74, .55); outline-offset: 2px; }
+
+.card-inquiry { margin-top: 4px; }
+.card-inquiry .btn { width: 100%; }
+
+.inquiry-kicker {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800;
+  letter-spacing: .03em; color: #6B4B11; background: var(--gold-soft);
+  border: 1px solid rgba(217, 163, 74, .35); padding: 4px 11px; border-radius: 999px; margin-bottom: 8px;
+}
+
+/* ---- لوحة صفحة البرنامج ---- */
+.inquiry-panel { display: grid; gap: 10px; border-color: rgba(217, 163, 74, .4); background: linear-gradient(180deg, #FFFDF8, #fff 60%); }
+.inquiry-panel h2 { margin: 0; }
+.inquiry-more { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px 14px; }
+.inquiry-more summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--navy); }
+.inquiry-more ul { margin: 8px 0 2px; padding-inline-start: 18px; font-size: 12.5px; color: #3A5266; line-height: 1.7; }
+
+/* ---- النافذة ---- */
+.inquiry-card { width: min(620px, 100%); padding-top: 24px; }
+.inquiry-card h3 { font-size: 21px; margin-bottom: 4px; }
+.inquiry-context {
+  display: grid; gap: 8px; background: var(--sand); border: 1px solid rgba(11, 42, 67, .08);
+  border-radius: 14px; padding: 12px 14px; margin: 12px 0 16px;
+}
+.inquiry-context-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.inquiry-context-title span { font-size: 11.5px; font-weight: 800; color: var(--muted); }
+.inquiry-context-title b { font-size: 15px; color: var(--navy); line-height: 1.5; }
+.inquiry-context-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.inquiry-context-grid div { display: grid; gap: 2px; min-width: 0; }
+.inquiry-context-grid dt { font-size: 11px; color: var(--muted); font-weight: 700; }
+.inquiry-context-grid dd { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+
+#inquiryForm { display: grid; gap: 14px; }
+.inquiry-fieldset legend { font-size: 13px; margin-bottom: 8px; }
+.inquiry-optional { font-weight: 600; color: var(--muted); font-size: 11.5px; }
+.inquiry-pills { display: grid; gap: 8px; }
+.inquiry-pill { width: 100%; }
+.inquiry-pill span { justify-content: flex-start; text-align: start; line-height: 1.45; padding: 11px 14px; }
+.inquiry-pill input:focus-visible + span { outline: 3px solid rgba(217, 163, 74, .6); outline-offset: 2px; }
+.inquiry-branches .choice { min-width: 0; }
+.inquiry-branch span { flex-direction: column; gap: 2px; font-size: 12.5px; }
+.inquiry-branch small { font-weight: 600; opacity: .8; font-size: 11.5px; }
+.inquiry-consent { font-size: 12.5px; }
+.inquiry-submit { margin-top: 2px; }
+.inquiry-card .field-hint { margin: 0; }
+
+.inquiry-success { display: grid; gap: 10px; text-align: center; padding: 6px 0 2px; }
+.inquiry-success-mark {
+  width: 54px; height: 54px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center;
+  background: #E7F5EF; color: var(--ok); font-size: 26px; font-weight: 800;
+}
+.inquiry-success h4 { margin: 0; font-size: 18px; color: var(--navy); }
+.inquiry-success p { margin: 0; font-size: 13px; line-height: 1.7; }
+.inquiry-ref {
+  font-family: ui-monospace, "Cascadia Mono", monospace; font-size: 20px; font-weight: 800;
+  letter-spacing: .06em; color: var(--navy); background: var(--gold-soft);
+  border: 1px dashed rgba(217, 163, 74, .6); border-radius: 12px; padding: 10px 14px;
+}
+
+.omp-inquiry-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.omp-inquiry-actions .btn { flex: 1 1 auto; }
+
+@media (max-width: 640px) {
+  .inquiry-card { width: 100%; padding: 22px 16px 18px; }
+  .inquiry-context-grid { grid-template-columns: 1fr 1fr; }
+  .inquiry-card h3 { font-size: 18.5px; }
+}
+@media (max-width: 380px) {
+  .inquiry-context-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-inquiry { transition: none; }
+}
+
+@media print {
+  .card-inquiry, .inquiry-panel, .inquiry-modal { display: none !important; }
+}
+
+/* رابط الهاتف داخل جدول الاستفسارات: نقرة واحدة تفتح واتساب */
+.wa-inline { color: #128C6E; font-weight: 700; font-size: 12.5px; text-decoration: none; }
+.wa-inline:hover { text-decoration: underline; }

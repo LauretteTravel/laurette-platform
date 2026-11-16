@@ -14,20 +14,6 @@
   let currentPage = 1;
   const fieldLabels = { firstName: 'الاسم الأول', lastName: 'اسم العائلة', email: 'البريد الإلكتروني', password: 'كلمة المرور', phone: 'رقم الهاتف' };
 
-  async function waitForTransition() {
-    if (window.loretShowTransition) {
-      await window.loretShowTransition();
-      window.loretHideTransition?.();
-    } else {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-  }
-
-  async function transitionStep(render) {
-    await waitForTransition();
-    render();
-  }
-
   async function api(path, { method = 'GET', body } = {}) {
     const response = await fetch(path, {
       method,
@@ -151,20 +137,13 @@
     </article>`;
   }
 
-  async function showDashboard(view = 'bookings', message = '', page = 1, transition = false) {
+  async function showDashboard(view = 'bookings', message = '', page = 1) {
     const [bookingData, me] = await Promise.all([api(`/api/client/bookings?page=${page}`), api('/api/client/auth/me')]);
     currentUser = me.user;
     currentPage = bookingData.page || 1;
     if (!currentUser) {
-      if (transition) {
-        await transitionStep(() => showLogin('انتهت الجلسة. سجّل الدخول مرة أخرى.'));
-        return;
-      }
       showLogin('انتهت الجلسة. سجّل الدخول مرة أخرى.');
       return;
-    }
-    if (transition) {
-      await waitForTransition();
     }
     const bookings = bookingData.bookings || [];
     const profileView = view === 'profile';
@@ -218,12 +197,12 @@
     const button = event.target.closest('[data-action]');
     if (!button) return;
     const action = button.dataset.action;
-    if (action === 'signup') return transitionStep(() => showSignup());
-    if (action === 'login') return transitionStep(() => showLogin());
+    if (action === 'signup') return showSignup();
+    if (action === 'login') return showLogin();
     if (action === 'refresh') {
       button.disabled = true;
       try {
-        await showDashboard('bookings', 'تم تحديث الحالات الآن.', currentPage, true);
+        await showDashboard('bookings', 'تم تحديث الحالات الآن.', currentPage);
       } catch (error) {
         showMessage(error.message, true);
         const refreshButton = portal.querySelector('[data-action="refresh"]');
@@ -235,7 +214,7 @@
       const page = Number(button.dataset.page);
       if (Number.isInteger(page) && page > 0) {
         try {
-          await showDashboard('bookings', '', page, true);
+          await showDashboard('bookings', '', page);
         } catch (error) {
           showMessage(error.message, true);
         }
@@ -246,9 +225,9 @@
       button.disabled = true;
       try {
         const result = await api('/api/client/auth/resend', { method: 'POST', body: { email: pendingEmail } });
-        await transitionStep(() => showVerification(pendingEmail, result.message));
+        showVerification(pendingEmail, result.message);
       } catch (error) {
-        await transitionStep(() => showVerification(pendingEmail, error.message));
+        showVerification(pendingEmail, error.message);
       }
       return;
     }
@@ -257,7 +236,7 @@
       try {
         await api('/api/client/auth/logout', { method: 'POST', body: {} });
         currentUser = null;
-        await transitionStep(() => showLogin('تم تسجيل الخروج بأمان.'));
+        showLogin('تم تسجيل الخروج بأمان.');
         showMessage('تم تسجيل الخروج بأمان.', false);
       } catch (error) {
         button.disabled = false;
@@ -276,25 +255,25 @@
     try {
       if (form.dataset.form === 'signup') {
         const result = await api('/api/client/auth/register', { method: 'POST', body: values });
-        await transitionStep(() => showVerification(values.email.trim().toLowerCase(), result.message));
+        showVerification(values.email.trim().toLowerCase(), result.message);
       } else if (form.dataset.form === 'login') {
         const result = await api('/api/client/auth/login', { method: 'POST', body: values });
         currentUser = result.user;
-        await showDashboard(portal.dataset.initialView === 'profile' ? 'profile' : 'bookings', '', 1, true);
+        await showDashboard(portal.dataset.initialView === 'profile' ? 'profile' : 'bookings');
       } else if (form.dataset.form === 'verify') {
         const result = await api('/api/client/auth/verify', { method: 'POST', body: { email: pendingEmail, code: values.code } });
         currentUser = result.user;
-        await showDashboard('bookings', 'تم تأكيد بريدك الإلكتروني.', 1, true);
+        await showDashboard('bookings', 'تم تأكيد بريدك الإلكتروني.');
       } else if (form.dataset.form === 'profile') {
         const result = await api('/api/client/profile', { method: 'PATCH', body: values });
         currentUser = result.user;
-        await showDashboard('profile', 'تم حفظ بياناتك بنجاح.', 1, true);
+        await showDashboard('profile', 'تم حفظ بياناتك بنجاح.');
       }
     } catch (error) {
       if (form.dataset.form === 'login' && error.data?.errors?.emailVerificationRequired) {
-        await transitionStep(() => showVerification(values.email.trim().toLowerCase(), error.message));
+        showVerification(values.email.trim().toLowerCase(), error.message);
       } else if (form.dataset.form === 'signup' && error.status === 503) {
-        await transitionStep(() => showVerification(values.email.trim().toLowerCase(), error.message));
+        showVerification(values.email.trim().toLowerCase(), error.message);
       } else {
         const details = Object.entries(error.data?.errors || {})
           .map(([name, message]) => `${fieldLabels[name] || name}: ${message}`)

@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "task": "فحص الواجهة الأمامية وتجربة المستخدم العربية — منصة لوريت",
+    "date": "2026-11-13",
+    "scope": "public/assets/js (7 ملفات JS للمتصفح قراءة كاملة)، lib/views (5 ملفات قوالب قراءة كاملة)، public/assets/css (فحص موجّه: RTL/طباعة/hidden/جداول)، lib/forms + lib/util + lib/http + server.js (المسارات والسكربتات)، فحص قاعدة البيانات قراءةً فقط، و node --check لكل ملفات JS للمتصفح",
+    "constraints": "لم يُعدَّل أي ملف؛ قراءة data/laurette.db كانت readOnly فقط؛ server.js وlib/views/account.js قُرئا عبر PowerShell/Node بسبب hardlinks",
+    "verified": [
+      "node --check نجح على الملفات السبعة: account.js وapp.js وadmin.js وi18n-client.js وvoucher-generator.js وvoucher-studio.js وworkspace.js (لا أخطاء صياغة)",
+      "كل نقاط النهاية التي يستدعيها المتصفح موجودة في server.js: /api/settings، /i18n/en.json، /api/track، /api/recommend، /api/assistant، /api/requests، /api/track-event، /api/admin/* (شاملة reports.csv وmedia وtransfers)، /api/client/*، /api/auth/*، /api/public/offers/:token(+events)، مسارات /api/workspace* في lib/workspace.js",
+      "server.js يشحن admin.js وvoucher-generator.js وvoucher-studio.js في صفحة /admin، وworkspace shell يشحن voucher-generator.js وworkspace.js، وlayout() يشحن app.js وvoucher-generator.js في كل الصفحات العامة، وصفحة /account تشحن account.js",
+      "الصفحات العامة: <html lang=\"ar\" dir=\"rtl\"> و charset=utf-8 وviewport meta موجودة في layout.js وworkspace shell وadmin shell",
+      "قاعدة [hidden]{display:none!important} موجودة في app.css:36 فلا تنكسر عناصر hidden (chat-panel، waModal، compare-bar)",
+      "قواعد طباعة القسائم موجودة: voucher.css:113 (voucher-printing) وvoucher-studio.css:206 (vs-printing/vs-print-root)",
+      "لا روابط http://localhost في الواجهة؛ baseUrl يُشتق من BASE_URL/RENDER_EXTERNAL_URL/RAILWAY_PUBLIC_DOMAIN في server.js",
+      "أرقام واتساب في الإعدادات حالياً دولية (settings.whatsapp=962791193888 وcontactGroups كلها تبدأ ب962) — قراءة من data/laurette.db readOnly",
+      "phone-codes.json: 248 دولة وحقولها (name,iso,callingCode,flag) مطابقة لاستخدام account.js",
+      "cairo.css يشير إلى ملفات خطوط موجودة فعلاً في public/assets/fonts/ مع unicode-range عربي/لاتيني",
+      "جدول requests فارغ حالياً (0 صفوف) فلم يمكن التحقق من صيغة هواتف العملاء المخزنة فعلياً"
+    ],
+    "notRun": [
+      "لم يُشغَّل متصفح فعلي (لا اختبار تشغيلي ديناميكي) — الفحص تحليلي ساكن مدعوم بقراءة الكود وفحوص node --check وقراءة SQLite",
+      "لم تُفحص حزمتا wt-os/ وwhatsapp-openwa/ وlegacy/ لأن server.js يستورد من ./lib/* فقط (أُثبت من قائمة الاستيراد)"
+    ]
+  },
+  "findings": [
+    {
+      "id": "FE-1",
+      "file": "public/assets/js/app.js",
+      "line": 318,
+      "severity": "medium",
+      "category": "معالجة أخطاء",
+      "problem": "JSON.parse بلا try على محتوى #compareData في أعلى سلسلة التنفيذ: أي خلل في تحليل هذا الـJSON يوقف بقية تهيئة app.js كلها على صفحة /umrah (نموذج طلب العمرة، المتابعة، المحادثة، نافذة واتساب، نوافذ العروض، الأصوات) لأن الكود بعد هذه النقطة لن يُنفَّذ.",
+      "evidence": "app.js:318 «const rows = JSON.parse(compareData.textContent || '[]');» بلا try/catch، بينما التحليل المماثل لـ#offersData في app.js:607-611 محاط بtry. البيانات تُولَّد في lib/views/public.js (umrahPage) عبر JSON.stringify فالخطر بنيوي وليس قائماً الآن.",
+      "suggestion": "تغليف التحليل بtry/catch مع افتراض مصفوفة فارغة، تماماً كنمط offersData."
+    },
+    {
+      "id": "FE-2",
+      "file": "lib/views/public.js",
+      "line": 871,
+      "severity": "medium",
+      "category": "تشغيل",
+      "problem": "زر «طباعة / حفظ PDF» في كتالوج البرامج (data-print-catalog) بلا أي معالج JavaScript: النقر عليه لا يفعل شيئاً، والمستخدم لا يملك إلا Ctrl+P اليدوي.",
+      "evidence": "public.js:871 يُصدر <button type=\"button\" data-print-catalog>؛ وبحث grep عن print-catalog/data-print-catalog في كل المجلد أظهر المطابقة في public/assets/js/app.js وغيره من ملفات JS: لا وجود لأي معالج (المطابقات فقط في القالب وapp.css:1187-1203 وأسطر wt-os المكررة).",
+      "suggestion": "إضافة معالج في app.js: document.querySelector('[data-print-catalog]')?.addEventListener('click', () => window.print())."
+    },
+    {
+      "id": "FE-3",
+      "file": "public/assets/js/admin.js",
+      "line": 467,
+      "severity": "medium",
+      "category": "واتساب",
+      "problem": "رابط «واتساب العميل» في لوحة الإدارة يبني wa.me من أرقام payload.phone الخام بعد حذف غير الأرقام فقط، وبدون تطبيع الأرقام المحلية؛ والنماذج العامة تشجع إدخال الصيغة المحلية 07xxxxxxxx (placeholder في lib/views/forms.js:41 و264، وتعبير phoneRe في app.js:41 يقبل 8-15 رقماً بدون +) — فتنكسر الروابط لأي عميل أدخل رقماً محلياً أو مسبوقاً ب00.",
+      "evidence": "admin.js:467 «https://wa.me/${String(payload.phone).replace(/\\D/g, '')}»؛ بالمقابل workspace.js:76 (waLink) يعالج /^07\\d{8}$/ بإضافة 962 — تفاوت بين الأداتين. جدول requests فارغ حالياً فلم يمكن إثبات وجود أرقام محلية مخزنة فعلاً؛ الملاحظة على مستوى الكود ومسار البيانات.",
+      "suggestion": "توحيد تطبيع الهاتف (07→962 و00→حذف) في دالة واحدة يُستخدم في admin.js وworkspace.js، مع عرض تنبيه عند صيغة غير قابلة للواتساب."
+    },
+    {
+      "id": "FE-4",
+      "file": "lib/views/public2.js",
+      "line": 647,
+      "severity": "medium",
+      "category": "RTL",
+      "problem": "نص عربي مشوّه ظاهر للمستخدم في وصف صفحة الأسئلة الشائعة: «إجابات عن الأسئلة التي تصleنا فعلًا» — حروف لاتينية داخل كلمة عربية (الصواب: تصلنا).",
+      "evidence": "public2.js:647 في faqPage: sub: 'إجابات عن الأسئلة التي تصleنا فعلًا: الأمتعة، الأسعار، التأشيرات، العمرة، والفنادق.' — ظهر النص المعطوب كما هو في القراءة المباشرة للملف.",
+      "suggestion": "تصحيح الكلمة إلى «تصلنا» ومراجعة بقية نصوص القوالب بحثاً عن تشوهات مشابهة."
+    },
+    {
+      "id": "FE-5",
+      "file": "lib/views/public2.js",
+      "line": 363,
+      "severity": "improvement",
+      "category": "تشغيل",
+      "problem": "زر «اطلب مراجعة هذه التأشيرة» في كل بطاقة تأشيرة يشير إلى المرساة #visa-form التي لا يوجد لها عنصر بأي id في الصفحة (نموذج visaForm في lib/views/forms.js بلا id) — النقر يغيّر الهاش فقط ولا يمرّر إلى النموذج.",
+      "evidence": "public2.js:363 <a href=\"#visa-form>؛ وgrep عن 'visa-form' في lib/views أظهر مطابقة واحدة فقط (الرابط نفسه، لا يوجد id=\"visa-form\"). معالج التمرير في app.js يتجاهل الهدف غير الموجود بسلامة (document.querySelector يعيد null).",
+      "suggestion": "إضافة id=\"visa-form\" إلى غلاف النموذج في visaForm أو تحويل الرابط إلى /visa#request مع تعريف المرساة."
+    },
+    {
+      "id": "FE-6",
+      "file": "public/assets/js/admin.js",
+      "line": 154,
+      "severity": "improvement",
+      "category": "معالجة أخطاء",
+      "problem": "renderShell يضيف مستمع نقر (onNavClick) على عنصر #adminRoot الدائم في كل مرة تُستدعى (عند كل تسجيل دخول جديد بعد خروج) — تتراكم المستمعات: كل نقرة قسم تُنفّذ loadSection مرتين (طلبات مكررة وميض في العرض) ويزداد العدد مع كل دورة خروج/دخول.",
+      "evidence": "admin.js:154 «root.addEventListener('click', onNavClick);» داخل renderShell، وroot ثابت على مستوى الوحدة (admin.js:10) بينما innerHTML فقط ما يُستبدل؛ مسار: renderLogin → تسجيل دخول → boot() → renderShell() مرة أخرى.",
+      "suggestion": "استبدال المستمع بمفوّض واحد مضاف مرة عند الإقلاع، أو إزالة المستمع القديم قبل الإضافة (AbortController/علامة dataset)."
+    },
+    {
+      "id": "FE-7",
+      "file": "public/assets/js/app.js",
+      "line": 167,
+      "severity": "improvement",
+      "category": "أمن",
+      "problem": "resultMarkup يحقن res.summary (وحقول أخرى) عبر innerHTML بلا HTML-escaping، وres.summary مبنية من مدخلات المستخدم في الخلفية (lib/domain.js:357 summarize من origin/destination/messages) — نص يحوي وسم HTML سيُنفَّذ/يكسر التخطيط في نتيجة الطلب. نفس النمط في رسائل المحادثة: app.js:443-444 يحقن s.url وs.label من استجابة المساعد بلا escaping.",
+      "evidence": "app.js:167-189 (resultMarkup: `${res.summary}` و`${res.reference}` و`${res.trackUrl}` داخل قالب HTML) وapp.js:443-445 (msg-src innerHTML بمصادر المساعد)؛ سلسلة المصدر: /api/requests → api.js:174 → domain.js:357 summarize() تستخدم قيماً خاملة من المستخدم. النطاق ذاتي (المستخدم يهاجم نفسه) لكنه يكسر الصفحة ويعتمد على ثقة استجابة الخادم.",
+      "suggestion": "esc() على summary/reference/trackUrl/أو مصادر sources قبل الحقن (دالة esc موجودة أصلاً في ملفات أخرى)."
+    },
+    {
+      "id": "FE-8",
+      "file": "public/assets/js/account.js",
+      "line": 27,
+      "severity": "improvement",
+      "category": "معالجة أخطاء",
+      "problem": "response.json() بلا حماية في api() بصفحة حساب العميل (وworkspace.js:21 نفس النمط): أي استجابة غير JSON (صفحة خطأ HTML من بروكسي/502 على الاستضافة) ترمي SyntaxError برسالة إنجليزية تقنية تُعرض للمستخدم العربي بدلاً من رسالة واضحة، بينما admin.js:36 يعالج الحالة بـ.catch(() => ({})) — تفاوت بين الأدوات الثلاث.",
+      "evidence": "account.js:27 «const data = await response.json();» وworkspace.js:21 «const result=await response.json();» بلا catch حول التحليل؛ admin.js:36 «const data = await res.json().catch(() => ({}));» كنمط صحيح.",
+      "suggestion": "تطبيق نفس نمط admin.js في account.js وworkspace.js مع رسالة عربية عند فشل التحليل."
+    },
+    {
+      "id": "FE-9",
+      "file": "public/assets/css/app.css",
+      "line": 521,
+      "severity": "improvement",
+      "category": "RTL",
+      "problem": "جداول لوحة الإدارة (.admin-table width:100%) تُعرض داخل admin-card-body بلا غلاف تمرير أفقي (طاولة class=\"table-wrap\" ذات overflow-x:auto موجودة في app.css:321 لكنها غير مستخدمة في جداول admin) — جدول الطلبات ذو 9 أعمدة (admin.js:325-339) ينضغط أو يفيض أفقياً على الجوال.",
+      "evidence": "app.css:521 «.admin-table { width: 100%; font-size: 13px; }» بلا معالجة فيض؛ القوالب في admin.js تُصدّر <table class=\"admin-table\"> مباشرة داخل admin-card-body (مثال renderRequests بـ9 أعمدة) دون table-wrap؛ نقطة كسر الجوال الوحيدة في app.css:574 تجعل الشبكة عموداً واحداً فقط.",
+      "suggestion": "تغليف جداول admin بـ.table-wrap أو إضافة overflow-x:auto على .admin-card-body عند احتواء جدول."
+    },
+    {
+      "id": "FE-10",
+      "file": "public/assets/js/voucher-studio.js",
+      "line": 327,
+      "severity": "improvement",
+      "category": "مستندات",
+      "problem": "حقل «ملاحظات المسافر» و«الشروط والأحكام» في استوديو القسيمة يعرضان المصفوفة المحفوظة مدموجة بفواصل (String(array)) بدل سطر لكل ملاحظة: عند فتح مسودة محفوظة تظهر العناصر بصيغة «أ، ب، ج» داخل textarea، وعند أول تعديل تُعامل الفواصل جزءاً من النص.",
+      "evidence": "voucher-studio.js:327-328 يمرر get('notes') (مصفوفة من defaults()) إلى field() التي في voucher-studio.js:171 تطبع ${esc(value)} على المصفوفة مباشرة؛ بينما منطق الإدخال (bind: input handler) يقسم على \\n فقط.",
+      "suggestion": "عند العرض في وضع textarea: Array.isArray(value) ? value.join('\\n') : value."
+    },
+    {
+      "id": "FE-11",
+      "file": "public/assets/js/voucher-generator.js",
+      "line": 231,
+      "severity": "improvement",
+      "category": "مستندات",
+      "problem": "loadScript في مولّد القسائم يعيد resolve فوراً إذا وُجد وسم <script> بنفس src حتى لو ما زال قيد التحميل (طلب PDF أثناء تحميل سابق متزامن) — قد يفشل window.html2canvas/jspdf ويُسقط المستخدم إلى نافذة الطباعة رغم أن المكتبة كانت ستصل بعد لحظات.",
+      "evidence": "voucher-generator.js:229-238: «if (document.querySelector(`script[src=\"${src}\"]`)) return resolve();» بلا انتظار onload للوسم الموجود؛ نفس النمط في voucher-studio.js loadScript.",
+      "suggestion": "تخزين الوعد الأول (cache promise) وإعادة نفس الوعد للنداءات المتزامنة بدل فحص وجود الوسم."
+    }
+  ]
+}

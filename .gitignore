@@ -20,3 +20,9 @@ shots/
 *.zip
 .DS_Store
 Thumbs.db
+
+# مخرجات التدقيق المحلية: لا تُرفع قواعد SQLite ولا ملفات WAL/SHM إلى المستودع
+audit-laurette/**/*.db
+audit-laurette/**/*.db-wal
+audit-laurette/**/*.db-shm
+audit-laurette/**/*.sqlite

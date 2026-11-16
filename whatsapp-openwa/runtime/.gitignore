@@ -1,0 +1,7 @@
+/node_modules/
+/.open-wa/
+/_IGNORE_*/
+/*.data.json
+.env
+.env.*
+!.env.example

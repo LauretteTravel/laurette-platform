@@ -1,0 +1,61 @@
+{
+  "generatedAt": "2026-11-13T23:26:00+03:00",
+  "task": "اختبار إقلاع حي آمن (smoke boot) لسيرفر منصة لوريت على بيئة ويندوز المحلية",
+  "runState": {
+    "entryPoint": "server.js (package.json: \"start\": \"node server.js\")",
+    "listen": "process.env.PORT || 3000 على server.js:527؛ المضيف 127.0.0.1 في غير الإنتاج على server.js:528",
+    "dbPath": "options.dbFile || process.env.DB_FILE || data/laurette.db على server.js:67؛ الفتح عبر openDb (lib/db.js:519-521، node:sqlite DatabaseSync) مع PRAGMA journal_mode = WAL (lib/db.js:7)",
+    "dependencies": "لا اعتماديات خارجية في package.json؛ npm install نفّذ بنجاح: \"up to date, audited 1 package in 13s / found 0 vulnerabilities\" ولم ينشئ node_modules",
+    "startCommand": "PORT=4123 DB_FILE=<جذر>\\audit-laurette\\runtime\\laurette.db ADMIN_PASSWORD=audit-smoke-2026 LOG_REQUESTS=1 node server.js عبر Start-Process",
+    "pid": "node.exe PID 13724 مع عملية ابنة PID 9724",
+    "startupStatus": "نجح — جاهز على أول استطلاع (GET / => 200 بعد أقل من ثانية)، بانر \"لوريت — المنصة تعمل الآن\" في server.log",
+    "requests": [
+      "GET / => 200 (96262 B، text/html; charset=utf-8)",
+      "GET /programs => 200 (152426 B)",
+      "GET /admin => 200 (1948 B، صفحة دخول لوحة الإدارة lang=ar dir=rtl)",
+      "GET /faq => 200 (32355 B)",
+      "GET /api/admin/reports => 401 Unauthorized (الحماية تعمل كما هو متوقع — طلب قرائي فقط)"
+    ],
+    "serverOutput": "server.err.log فارغ تماماً (0 بايت) طوال التشغيل: لا UnhandledPromiseRejection ولا SQLITE_BUSY ولا انهيار ولا تحذيرات متكررة؛ server.log يحتوي البانر و9 أسطر طلبات كلها 200/401",
+    "stopCommand": "taskkill /T /F /PID 13724 => SUCCESS (أنهى 13724 والابن 9724)",
+    "stopStatus": "تم التوقف والتحقق: لا توجد أي عملية node.exe مع server.js بعد الإيقاف",
+    "integrity": "data/laurette.db بجم SHA256 نفسه قبل وبعد التشغيل (0283826B69CE9D241B119591006803B599DE4D57B260AD2F9D856FE7CF9B0031)، الحجم 753664 بايت وآخر تعديل 10/31/2026 دون تغيير؛ النسخة الاحتياطية محفوظة في audit-laurette/runtime/laurette.db ولم تُحذف",
+    "monitors": "مراقبتان file_tail على server.log وserver.err.log (monitorId 8af8674f-05a9-4537-94de-f6c596db0130 و 1fb111b8-6ab0-47f2-893c-d071098bca25) — لا تنبيهات وصلت أثناء النافذة"
+  },
+  "findings": [
+    {
+      "id": "SM-1",
+      "file": "server.js",
+      "line": 74,
+      "severity": "improvement",
+      "category": "تشغيل",
+      "problem": "كل إقلاع للسيرفر ينفّذ كتابة على قاعدة البيانات قبل فتح المنفذ: openDb ينفّذ SCHEMA وترحيل الأعمدة فور الفتح (lib/db.js:519-545) ثم seedDatabase وpurgeExpiredSessions في createApp (server.js:74-75) — لا يوجد إقلاع قرائي، وفشل أي كتابة (مثل نظام ملفات للقراءة فقط أو قاعدة مقفلة) يمنع إقلاع الخادم كلياً."
+    },
+    {
+      "id": "SM-2",
+      "file": "data/laurette.db-wal",
+      "line": 0,
+      "severity": "improvement",
+      "category": "تشغيل",
+      "problem": "خلال نافذة الفحص (11:15:48 PM) ظهر laurette.db-wal (0 بايت) وlaurette.db-shm في data/ رغم أن تشغيلنا لم يفتح الأصل إطلاقاً (التوجيه DB_FILE إلى النسخة، والسجل أنشئ 11:15:58، وبصمة الأصل بجمها نفسها) — لا يوجد مسار مرمّز في الشيفرة يفتح data/laurette.db عند الإقلاع (فحص كل lib/*.js)؛ المصدر الأرجح عملية فحص متوازية/المنسّق، والقاعدة بوضع WAL دائم (lib/db.js:7) فيترك أي قارئ أثر -wal/-shm خلفه عند الإغلاق غير النظيف."
+    },
+    {
+      "id": "SM-3",
+      "file": "server.js",
+      "line": 58,
+      "severity": "improvement",
+      "category": "أمن",
+      "problem": "عند غياب ADMIN_PASSWORD وdata/admin-credentials.txt يولّد السيرفر كلمة مرور مؤقتة ويكتبها في data/admin-credentials.txt (server.js:52-58) — سلوك مقبول للتطوير لكنه يعني إنشاء ملف بيانات دخول تلقائياً داخل مجلد البيانات عند أول إقلاع في بيئة نشر بلا متغير بيئة، وبقاءه صالحاً حتى أول تغيير."
+    }
+  ],
+  "evidence": {
+    "SM-1": "الدليل التجريبي: أثناء إقلاع قصير بلا أي طلبات كتابة وُلد audit-laurette/runtime/laurette.db-wal بحجم 197792 بايت بجانب النسخة الموجّهة (قائمة الملفات بعد الإيقاف)، بينما بجم ملف النسخة نفسه على القرص دون تغيير (الكتابة في WAL). الشيفرة: lib/db.js:519-521 (openDb → DatabaseSync) وlib/db.js:528-545 (ترحيل جدول requests) وserver.js:74-75.",
+    "SM-2": "الطوابع الزمنية: data/laurette.db-wal و-shm بتاريخ 11/13/2026 11:15:48 PM مقابل إنشاء server.err.log/server.log عند 11:15:58 PM؛ Get-FileHash data/laurette.db قبل التشغيل وبعده متطابق (0283826B...69CF9B0031)؛ grep على كل ملفات *.js خارج node_modules/.zwork/legacy/whatsapp-openwa أظهر المسارات المرمّزة فقط في tools/*.mjs وwt-os/server.js:114 (غير مستوردة من server.js).",
+    "SM-3": "الشيفرة: server.js:73 سلسلة (options.adminPassword || process.env.ADMIN_PASSWORD || localAdminPassword() || ensureAdminPassword()) وserver.js:52-58 كتابة الملف؛ لم يتفعّل أثناء فحصنا (الملف data/admin-credentials.txt موجود مسبقاً والسجل أكد \"بيانات الدخول: data/admin-credentials.txt\")."
+  },
+  "limitations": {
+    "browserCheck": "لم يُنفَّذ (اختياري): محاولة واحدة عبر autoglm فشلت بـ \"Extension did not connect in time\" (إضافة المتصفح غير مثبتة وتتطلب إعداداً تفاعلياً لمرة واحدة من المستخدم، غير متاح لوكيل فرعي)؛ عوّض بفحص برمجي: dir=\"rtl\" وlang=\"ar\" موجودان في / و/admin والعنوان العربي سليم بلا تشوّه ترميز في محتوى HTTP.",
+    "scopeLimits": "طلبات GET قرائية فقط (لا POST/PUT/DELETE)؛ لم تُفحص نقاط النهاية المحمية بمصادقة فعلية (تسجيل دخول) تجنباً لتعديل أي بيانات؛ لم يُقسَم الأصل أو يُفتح من طرف هذه المهمة.",
+    "consoleEncoding": "تشوّه الحروف العربية في مخرجات PowerShell (Get-Content) هو أثر ترميز كونسول ويندوز فقط — محتوى HTTP عبر Invoke-WebRequest ظهر سليماً بالكامل."
+  }
+}

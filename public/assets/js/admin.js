@@ -10,7 +10,7 @@
   const dt = (iso) => (iso ? new Date(iso).toLocaleString('ar-JO', { dateStyle: 'short', timeStyle: 'short' }) : '—');
   const day = (iso) => (iso ? new Date(iso).toLocaleDateString('ar-JO') : '—');
 
-  const state = { user: null, section: 'overview', query: {}, overlay: null };
+  const state = { user: null, section: 'overview', query: {}, inquiryQuery: {}, overlay: null };
   function hasPermission(permission) {
     if (Array.isArray(state.user?.permissions)) return state.user.permissions.includes('*') || state.user.permissions.includes(permission);
     if (state.user?.role === 'admin') return true;
@@ -57,6 +57,28 @@
     setTimeout(() => { el.classList.add('is-out'); setTimeout(() => el.remove(), 280); }, 3800);
   }
 
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('تم النسخ إلى الحافظة');
+      return true;
+    } catch {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'fixed';
+      helper.style.opacity = '0';
+      document.body.append(helper);
+      helper.select();
+      let copied = false;
+      try { copied = document.execCommand('copy'); } catch { copied = false; }
+      helper.remove();
+      if (copied) toast('تم النسخ إلى الحافظة');
+      else toast('فشل النسخ إلى الحافظة', 'bad');
+      return copied;
+    }
+  }
+
   /* ---------------- login ---------------- */
   function renderLogin(message = '') {
     root.innerHTML = `<div class="login-wrap">
@@ -94,6 +116,7 @@
   const SECTIONS = [
     { id: 'overview', label: 'نظرة عامة', icon: '▤', permission: 'overview:read' },
     { id: 'requests', label: 'الطلبات', icon: '✉', permission: 'requests:read' },
+    { id: 'inquiries', label: 'استفسارات الفنادق والعروض', icon: '🏨', permission: 'requests:read' },
     { id: 'voucher', label: 'قسيمة حجز يدوية', icon: '▦', permission: 'requests:read' },
     { id: 'reports', label: 'تقارير الأداء', icon: '▥', permission: 'reports:read' },
     { id: 'customers', label: 'العملاء (CRM)', icon: '☺', permission: 'customers:read' },
@@ -116,7 +139,7 @@
       return SECTIONS.filter((section) => state.user.permissions.includes('*') || state.user.permissions.includes(section.permission));
     }
     if (role === 'admin') return SECTIONS;
-    const allowed = { manager: ['overview', 'requests', 'voucher', 'reports', 'customers', 'programs', 'brochures', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
+    const allowed = { manager: ['overview', 'requests', 'inquiries', 'voucher', 'reports', 'customers', 'programs', 'brochures', 'content', 'visa', 'kb', 'audit', 'assistant'], agent: ['overview', 'requests', 'inquiries', 'voucher', 'customers', 'kb', 'assistant'] }[role] || ['overview'];
     return SECTIONS.filter((s) => allowed.includes(s.id));
   }
 
@@ -134,7 +157,7 @@
           <span class="brand-text"><b>لوريت</b><span>لوحة الإدارة</span></span>
         </a>
         <ul class="admin-nav">
-          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : ''}</button></li>`).join('')}
+          ${sections.map((s) => `<li><button type="button" data-section="${s.id}" class="${state.section === s.id ? 'is-active' : ''}"><span aria-hidden="true">${s.icon}</span>${esc(s.label)}${s.id === 'requests' ? '<span class="count" data-req-count>0</span>' : ''}${s.id === 'inquiries' ? '<span class="count" data-inq-count hidden>0</span>' : ''}</button></li>`).join('')}
         </ul>
         <div style="margin-top:auto;padding-top:18px;font-size:12px;color:rgba(255,255,255,.55)">
           <div style="margin-bottom:8px">${esc(state.user.name)} · ${esc(state.user.roleName || { admin: 'مدير', manager: 'مدير قسم', agent: 'موظف' }[state.user.role] || state.user.role)}</div>
@@ -159,6 +182,7 @@
       renderLogin();
     });
     loadSection();
+    refreshInquiryBadge();
   }
 
   function renderRequiredPasswordChange() {
@@ -222,7 +246,7 @@
     if (!view) return;
     view.innerHTML = '<div class="admin-card"><div class="admin-card-body">جارٍ التحميل…</div></div>';
     const map = {
-      overview: renderOverview, requests: renderRequests, customers: renderCustomers, programs: renderPrograms,
+      overview: renderOverview, requests: renderRequests, inquiries: renderInquiries, customers: renderCustomers, programs: renderPrograms,
       content: renderContent, visa: () => renderResource('visa'), kb: () => renderResource('kb'),
       brochures: async () => {
         try {
@@ -362,6 +386,97 @@
         toast(button.dataset.decision === 'accept' ? 'قُبل التحويل' : 'رُفض التحويل');
         renderRequests(page);
       } catch (error) { toast(error.message, 'bad'); }
+    }));
+  }
+
+  /* ---------------- inquiries (صندوق طلب فندق بديل) ---------------- */
+
+  function phoneDigits(phone) { return String(phone || '').replace(/\D/g, ''); }
+
+  /* شارة القائمة الجانبية = عدد الاستفسارات الجديدة فقط (غير المتواصل معها). */
+  async function refreshInquiryBadge() {
+    const badge = $('[data-inq-count]');
+    if (!badge || !hasPermission('requests:read')) return;
+    try {
+      const data = await api('/api/admin/inquiries/count');
+      const fresh = Number(data.counts?.new || 0);
+      badge.textContent = num(fresh);
+      badge.hidden = fresh === 0;
+    } catch { /* الشارة ليست حرجة لو تعطل الطلب */ }
+  }
+
+  async function renderInquiries(page = 1) {
+    const query = state.inquiryQuery || {};
+    const params = new URLSearchParams({ page: String(page) });
+    if (query.status) params.set('status', query.status);
+    if (query.q) params.set('q', query.q);
+    const data = await api(`/api/admin/inquiries?${params}`);
+    const counts = data.counts || {};
+    const badge = $('[data-inq-count]');
+    if (badge) { badge.textContent = num(counts.new || 0); badge.hidden = !counts.new; }
+    const canWrite = hasPermission('requests:write');
+    const filters = [
+      ['', 'الكل', counts.total],
+      ['new', 'جديد', counts.new],
+      ['contacted', 'تم التواصل', counts.contacted],
+      ['booked', 'تم الحجز', counts.booked],
+      ['cancelled', 'ملغي', counts.cancelled],
+    ].map(([value, label, total]) => `<button class="chip ${(query.status || '') === value ? 'is-active' : ''}" type="button" data-inq-filter="${value}">${esc(label)} (${num(total || 0)})</button>`).join('');
+
+    $('#view').innerHTML = `
+      <div class="admin-card mb-3"><div class="admin-card-body" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <div class="chips" style="margin:0">${filters}</div>
+        <span class="spacer" style="flex:1"></span>
+        <input data-inq-q placeholder="بحث بالاسم أو الهاتف أو البرنامج" value="${esc(query.q || '')}" style="max-width:260px">
+        <button class="btn btn-ghost btn-sm" data-inq-apply>بحث</button>
+        <button class="btn btn-ghost btn-sm" data-inq-refresh>تحديث</button>
+      </div></div>
+      <div class="admin-card"><div class="admin-card-head"><h2>استفسارات الفنادق والعروض</h2><span class="spacer" style="flex:1"></span>
+        <span class="muted" style="font-size:12px">${num(data.total)} استفسار · صفحة ${data.page}/${data.pages}</span></div>
+        <div class="admin-card-body" style="padding:0;overflow-x:auto">
+          <table class="admin-table"><thead><tr>
+            <th>التاريخ</th><th>العميل</th><th>البرنامج</th><th>نوع الاستفسار</th><th>الفندق المطلوب / ملاحظات</th><th>الفرع</th><th>الحالة</th>
+          </tr></thead><tbody>
+          ${data.inquiries.length ? data.inquiries.map((row) => `<tr>
+            <td>${dt(row.createdAt)}<br><small class="ref">${esc(row.reference)}</small></td>
+            <td><b>${esc(row.customerName)}</b><br><a class="wa-inline" dir="ltr" href="https://wa.me/${esc(phoneDigits(row.customerPhone))}" target="_blank" rel="noopener" title="محادثة واتساب">${esc(row.customerPhone)}</a></td>
+            <td style="max-width:220px">${esc(row.programTitle)}${row.currentHotel ? `<br><small class="muted">الفندق الحالي: ${esc(row.currentHotel)}</small>` : ''}</td>
+            <td>${esc(row.inquiryTypeLabel)}</td>
+            <td style="max-width:240px">${row.notes ? esc(row.notes) : '<span class="muted">—</span>'}</td>
+            <td>${esc(row.branchLabel || '—')}</td>
+            <td>${canWrite
+              ? `<select data-inq-status="${row.id}" aria-label="تغيير حالة الاستفسار">${Object.entries(data.statuses || {}).map(([key, meta]) => `<option value="${key}" ${row.status === key ? 'selected' : ''}>${esc(meta.label)}</option>`).join('')}</select>`
+              : `<span class="status-dot status-${row.status}">${esc(row.statusLabel)}</span>`}</td>
+          </tr>`).join('') : '<tr><td colspan="7" class="muted">لا توجد استفسارات مطابقة بعد. الاستفسارات الواردة من بطاقات البرامج تظهر هنا فوراً.</td></tr>'}
+          </tbody></table>
+        </div>
+      </div>
+      <div class="toolbar mt-3" style="justify-content:center">
+        <button class="btn btn-ghost btn-sm" data-inq-page="${data.page - 1}" ${data.page <= 1 ? 'disabled' : ''}>السابق</button>
+        <button class="btn btn-ghost btn-sm" data-inq-page="${data.page + 1}" ${data.page >= data.pages ? 'disabled' : ''}>التالي</button>
+      </div>`;
+
+    $$('[data-inq-filter]').forEach((button) => button.addEventListener('click', () => {
+      state.inquiryQuery = { ...state.inquiryQuery, status: button.dataset.inqFilter };
+      renderInquiries(1);
+    }));
+    $('[data-inq-apply]')?.addEventListener('click', () => {
+      state.inquiryQuery = { ...state.inquiryQuery, q: $('[data-inq-q]').value.trim() };
+      renderInquiries(1);
+    });
+    $('[data-inq-q]')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') $('[data-inq-apply]')?.click(); });
+    $('[data-inq-refresh]')?.addEventListener('click', () => renderInquiries(page));
+    $$('[data-inq-page]').forEach((button) => button.addEventListener('click', () => renderInquiries(Number(button.dataset.inqPage))));
+    $$('[data-inq-status]').forEach((select) => select.addEventListener('change', async () => {
+      select.disabled = true;
+      try {
+        await api(`/api/admin/inquiries/${select.dataset.inqStatus}`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) });
+        toast('تم تحديث حالة الاستفسار');
+        await renderInquiries(page);
+      } catch (error) {
+        toast(error.message, 'bad');
+        select.disabled = false;
+      }
     }));
   }
 
@@ -610,7 +725,33 @@
     { key: 'flights', label: 'الرحلات الجوية', type: 'list', rows: 4 },
     { key: 'badges', label: 'الشارات', type: 'list', rows: 2 },
     { key: 'description', label: 'وصف داخلي', type: 'textarea', rows: 3 },
+    { key: 'department', label: 'الإدارة المسؤولة', hint: 'نص حر — مثال: قسم السياحة الخارجية' },
+    { key: 'imageUrl', label: 'صورة البرنامج (رابط)', datalist: true, hint: 'اختر من مكتبة الوسائط أو الصق رابطًا' },
+    { key: 'posterImage', label: 'بوستر المبيعات (رابط)', datalist: true, hint: 'اختر من مكتبة الوسائط أو الصق رابطًا' },
+    { key: 'pdfBrochureUrl', label: 'ملف البرنامج PDF (رابط)' },
+    { key: 'pricingTiers', label: 'جدول الفنادق والأسعار', type: 'list', rows: 6, hint: 'سطر لكل فندق: اسم الفندق | النجوم | نوع الغرفة | السعر | ملاحظات', placeholder: 'فندق دار التوحيد | 5 | غرفة مزدوجة | 450 | شامل الإفطار' },
   ];
+
+  function programLink(p) {
+    return `${location.origin}/p/${p.slug}?ref=${state.user?.id ?? ''}`;
+  }
+
+  function pitchText(p) {
+    const days = p.days === null || p.days === undefined || p.days === '' ? null : Number(p.days);
+    const nights = p.nights === null || p.nights === undefined || p.nights === '' ? null : Number(p.nights);
+    const duration = days ? `${days} أيام` : (nights ? `${nights} ليالٍ` : null);
+    const currencyLabel = p.currency && p.currency !== 'د.أ' ? p.currency : 'دينار أردني';
+    const lines = [
+      'أهلاً بك في شركة لوريت للسياحة والسفر والحج والعمرة 🌴',
+      `إليك تفاصيل برنامج *${p.title ?? ''}*${duration ? ` (${duration})` : ''}:`,
+      `✨ السعر يبدأ من: *${num(p.price_from)} ${currencyLabel}*`,
+      '📄 لتصفح جدول الفنادق والأسعار وتحميل ملف البرنامج الكامل (PDF) مباشرة دون عناء:',
+      programLink(p),
+      'أنا معك لأي استفسار أو لتثبيت الحجز!',
+    ];
+    if (p.price_from === null || p.price_from === undefined || p.price_from === '') lines.splice(2, 1);
+    return lines.join('\n');
+  }
 
   async function renderPrograms() {
     const data = await api('/api/admin/programs');
@@ -628,7 +769,7 @@
           <td>${esc(p.category)}</td><td>${p.price_from ? `${num(p.price_from)} ${esc(p.currency)}` : '—'}</td>
           <td><span class="badge ${p.status === 'published' ? 'badge-ok' : p.status === 'sold_out' ? 'badge-danger' : 'badge-line'}">${esc({ published: 'منشور', draft: 'مسودة', sold_out: 'نفدت', archived: 'مؤرشف' }[p.status] || p.status)}</span></td>
           <td>${p.featured ? '★' : '—'}</td>
-          <td class="btn-row"><button class="btn btn-ghost btn-sm" data-edit-program="${p.id}">تعديل</button><button class="btn btn-danger btn-sm" data-del-program="${p.id}">حذف</button></td>
+          <td class="btn-row"><button class="btn btn-ghost btn-sm" data-edit-program="${p.id}">تعديل</button><button class="btn btn-danger btn-sm" data-del-program="${p.id}">حذف</button>${p.status === 'published' || p.status === 'sold_out' ? `<button class="btn btn-ghost btn-sm" data-wa-pitch="${p.id}" title="نسخ رد واتساب جاهز لبيع هذا البرنامج">رد واتساب جاهز</button><button class="btn btn-ghost btn-sm" data-copy-link="${p.id}" title="نسخ رابط صفحة البرنامج">نسخ الرابط</button>` : ''}</td>
         </tr>`).join('')}</tbody></table>
       </div></div>`;
     $('[data-new-program]')?.addEventListener('click', () => openProgramForm(null));
@@ -636,6 +777,14 @@
     $$('[data-del-program]').forEach((b) => b.addEventListener('click', async () => {
       if (!confirm('حذف أو أرشفة هذا البرنامج؟')) return;
       try { const r = await api(`/api/admin/programs/${b.dataset.delProgram}`, { method: 'DELETE' }); toast(r.message || 'تم'); renderPrograms(); } catch (e) { toast(e.message, 'bad'); }
+    }));
+    $$('[data-wa-pitch]').forEach((b) => b.addEventListener('click', () => {
+      const p = items.find((row) => row.id === Number(b.dataset.waPitch));
+      if (p) copyText(pitchText(p));
+    }));
+    $$('[data-copy-link]').forEach((b) => b.addEventListener('click', () => {
+      const p = items.find((row) => row.id === Number(b.dataset.copyLink));
+      if (p) copyText(programLink(p));
     }));
   }
 
@@ -645,8 +794,42 @@
       return `<select id="${id}" data-key="${field.key}">${field.options.map(([v, l]) => `<option value="${v}" ${String(v) === String(value ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     }
     if (field.type === 'textarea') return `<textarea id="${id}" data-key="${field.key}" rows="${field.rows || 4}">${esc(value ?? '')}</textarea>`;
-    if (field.type === 'list') return `<textarea id="${id}" data-key="${field.key}" rows="${field.rows || 4}">${esc(Array.isArray(value) ? value.map((v) => (typeof v === 'object' ? (field.key === 'hotels' ? `${v.city} | ${v.name} | ${v.stars || 0} | ${v.distance || ''}` : `${v.label} | ${v.price}`) : v)).join('\n') : (value || ''))}</textarea>`;
+    if (field.type === 'list') return `<textarea id="${id}" data-key="${field.key}" rows="${field.rows || 4}"${field.placeholder ? ` placeholder="${esc(field.placeholder)}"` : ''}>${esc(Array.isArray(value) ? value.map((v) => (typeof v === 'object' ? (field.key === 'hotels' ? `${v.city} | ${v.name} | ${v.stars || 0} | ${v.distance || ''}` : `${v.label} | ${v.price}`) : v)).join('\n') : (value || ''))}</textarea>`;
     return `<input id="${id}" data-key="${field.key}" type="${field.type || 'text'}" value="${esc(value ?? '')}"${field.datalist ? ' list="mediaList"' : ''}>`;
+  }
+
+  /* أعمدة snake_case كما يعيدها GET /api/admin/programs (SELECT *) مقابل مفاتيح camelCase المرسلة في POST/PATCH */
+  const PROGRAM_FIELD_SNAKE = { posterImage: 'poster_image', pdfBrochureUrl: 'pdf_brochure_url', imageUrl: 'image_url', pricingTiers: 'pricing_tiers_json' };
+
+  function fieldInitial(field, row) {
+    const raw = row[field.key] ?? row[PROGRAM_FIELD_SNAKE[field.key]];
+    if (field.key === 'pricingTiers') {
+      let list = null;
+      if (Array.isArray(raw)) list = raw;
+      else if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+        try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) list = parsed; } catch { list = null; }
+      }
+      if (list) {
+        return list.map((v) => (v && typeof v === 'object'
+          ? [v.hotel || v.name || '', v.stars ?? '', v.room || '', v.price ?? '', v.notes || ''].filter((part, i) => i < 4 || String(part).trim() !== '').join(' | ')
+          : String(v)));
+      }
+    }
+    return raw;
+  }
+
+  const PROGRAM_UPLOADS = {
+    posterImage: { kind: 'poster', accept: 'image/jpeg,image/png,image/webp' },
+    pdfBrochureUrl: { kind: 'brochure', accept: 'application/pdf' },
+  };
+
+  function programUploadRow(key) {
+    const cfg = PROGRAM_UPLOADS[key];
+    return `<div class="upload-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px">
+          <input type="file" data-upload-file="${cfg.kind}" accept="${cfg.accept}" style="max-width:230px;font-size:12px">
+          <button class="btn btn-ghost btn-sm" type="button" data-upload="${cfg.kind}" data-upload-field="${key}">رفع من الجهاز</button>
+          <span class="field-hint">${cfg.kind === 'poster' ? 'يدخل القسم بيانات الفنادق والأسعار أولًا، ثم يرفع المصمم البوستر وملف PDF من نفس البطاقة.' : 'اختر ملف PDF من الجهاز؛ بعد نجاح الرفع اضغط «حفظ» لتثبيت الرابط في النموذج.'}</span>
+        </div>`;
   }
 
   function openProgramForm(program) {
@@ -657,8 +840,9 @@
         <div class="form-grid">
           ${PROGRAM_FIELDS.map((f) => `<div class="field ${f.full ? 'field-full' : ''}">
             <label for="ff-${f.key}">${esc(f.label)}</label>
-            ${fieldControl(f, p[f.key])}
+            ${fieldControl(f, fieldInitial(f, p))}
             ${f.hint ? `<span class="field-hint">${esc(f.hint)}</span>` : ''}
+            ${program && PROGRAM_UPLOADS[f.key] ? programUploadRow(f.key) : ''}
           </div>`).join('')}
         </div>
         <div class="check"><label class="check"><input type="checkbox" id="ff-featured" ${p.featured ? 'checked' : ''}> <span>برنامج مميز (يظهر في الرئيسية)</span></label></div>
@@ -687,6 +871,36 @@
         $('[data-form-error]').textContent = err.message;
       }
     });
+    if (program) {
+      $$('[data-upload]').forEach((b) => b.addEventListener('click', async () => {
+        const file = $(`[data-upload-file="${b.dataset.upload}"]`)?.files?.[0];
+        if (!file) { toast('اختر ملفًا من الجهاز أولًا', 'warn'); return; }
+        b.disabled = true;
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error('تعذر قراءة الملف من الجهاز'));
+            reader.readAsDataURL(file);
+          });
+          const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+          const r = await api(`/api/admin/programs/${program.id}/upload-brochure`, { method: 'POST', body: JSON.stringify({ kind: b.dataset.upload, filename: file.name, base64 }) });
+          const input = $(`#ff-${b.dataset.uploadField}`);
+          if (input && r.url) input.value = r.url;
+          toast(`تم رفع الملف بنجاح (${num(Math.round((r.size || 0) / 1024))} ك.ب)`);
+        } catch (err) {
+          toast(err.message, 'bad');
+        } finally {
+          b.disabled = false;
+        }
+      }));
+    }
+    api('/api/admin/media').then((media) => {
+      const datalist = document.createElement('datalist');
+      datalist.id = 'mediaList';
+      datalist.innerHTML = media.files.map((f) => `<option value="${esc(f)}"></option>`).join('');
+      $('#programForm').append(datalist);
+    }).catch(() => {});
   }
 
   /* ---------------- generic content resources ---------------- */

@@ -1,0 +1,123 @@
+[
+  {
+    "id": "BE-1",
+    "file": "lib/api.js",
+    "line": 1476,
+    "severity": "critical",
+    "category": "كسر التحكم بالوصول",
+    "problem": "updateUser: تعيين الدور القديم (role بلا role_key) لا يمر عبر فحص التفويض canDelegateProfile، والشرط الحالي يسمح حرفيًا بتعيين role='admin' على الحساب نفسه أو على أي مستخدم ضمن نطاق الفاعل، فيصبح صلاحية '*' كاملة عبر can() في lib/auth.js:81-88 متجاوزًا نموذج نطاقات البيانات.",
+    "reason": "فرع roleKey (السطر 1463) يفحص canDelegateProfile ويحمي الحساب الذاتي من خفض الصلاحية، أما فرع role القديم (1476-1480) فشرطه الوحيد `target.id === user.id && body.role !== 'admin'` أي أن القيمة 'admin' مسموحة للذات صراحة، ولا يوجد أي فحص لنطاق أو صلاحيات الفاعل عند تعيين دور مستخدم آخر. الصلاحية الفعلية تُحسب من role عبر PERMISSIONS في lib/auth.js:81 حيث admin = ['*']. الثغرة كامنة حاليًا لأن جدول users (قراءة للقراءة فقط من data/laurette.db) يضم مستخدمًا واحدًا فقط (laurette/admin، role_key=null)، لكنها تُفعَّل بأول دور مخصص يُمنح users:write.",
+    "evidence": "} else if (body.role) {\n    if (target.id === user.id && body.role !== 'admin') return fail(ctx.res, 422, 'لا يمكنك خفض صلاحية حسابك الحالي');\n    updates.push('role = ?', 'role_key = NULL');\n    params.push(body.role);\n  }",
+    "suggestion": "حظر تعيين role='admin' عبر المسار القديم ما لم يكن الفاعل مديرًا قديمًا (roleKey=null && role='admin')، وتطبيق canDelegateProfile/فحص نطاق الفاعل على فرع role كما في فرع roleKey، ومنع أي مستخدم من تغيير دور حسابه الذاتي في المسارين."
+  },
+  {
+    "id": "BE-2",
+    "file": "lib/api.js",
+    "line": 1424,
+    "severity": "critical",
+    "category": "كسر التحكم بالوصول",
+    "problem": "createUser: عند إرسال roleKey فارغًا وrole='admin' يُنشأ مستخدم legacy بأدنى فحوص؛ resolvedRole يُحسم مباشرة من body.role دون أي فحص تفويض، فيحصل الحساب الجديد على صلاحية '*' كاملة عبر PERMISSIONS.admin في lib/auth.js:81.",
+    "reason": "فحص canDelegateProfile في السطر 1423 يُنفَّذ فقط عند وجود profile (أي عند إرسال roleKey)، وحراس النطاق في الأسطر 1435-1437 يفحصون الفرع/القسم فقط لا الدور، بينما السطر 1424 `const resolvedRole = profile ? profile.base_role : role;` يمرر 'admin' كما هو. صلاحية users:write لأي دور مقيد تكفي لسكّ حساب مدير كامل (الإسكات نفسه في BE-1).",
+    "evidence": "const profile = roleKey ? one(ctx.db, 'SELECT role_key, base_role, data_scope, permissions FROM role_definitions WHERE role_key = ? AND active = 1', [roleKey]) : null;\n  if (roleKey && !profile) return fail(ctx.res, 422, 'الدور المحدد غير موجود أو غير فعال');\n  if (profile && !canDelegateProfile(user, profile)) return fail(ctx.res, 403, 'لا يمكنك منح نطاق بيانات أو صلاحيات أوسع من صلاحياتك');\n  const resolvedRole = profile ? profile.base_role : role;",
+    "suggestion": "اعتبار body.role='admin' أو 'manager' بدون roleKey امتيازًا يتطلب فاعلًا legacy-admin، وإلا إجبار مسار role_definitions مع canDelegateProfile كما هو معمول به لغير المدير."
+  },
+  {
+    "id": "BE-3",
+    "file": "lib/http.js",
+    "line": 196,
+    "severity": "medium",
+    "category": "أمن",
+    "problem": "clientIp يأخذ أول عنصر من X-Forwarded-For الذي يتحكم فيه الطالب؛ على Render يضيف البروكسي العنوان الحقيقي بعد قيمة العميل، فتتحول ctx.ip إلى قيمة مزيّفة تُستخدم مفتاحًا لحدود المعدل وقفل الدخول وحقول IP في سجل التدقيق.",
+    "reason": "السطر يقسم على أول فاصلة ويعيد أول قيمة، وهو قيمة يرسلها العميل نفسه. هذه القيمة تصل إلى مفتاح حد المعدل في server.js:157 (`${limit}|${ctx.ip}`)، ومفتاح قفل محاولات الدخول في lib/api.js:25 (`${ip}|${username}`) وlib/client-api.js:138، وعمود ip في audit_log — أي تجاوز حدود المحاولات (توزيع محاولات كسر كلمة المرور على مفاتيح لا نهائية) وتزييف أثر التدقيق.",
+    "evidence": "export function clientIp(req) {\n  const fwd = req.headers['x-forwarded-for'];\n  if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();\n  return req.socket?.remoteAddress || 'unknown';\n}",
+    "suggestion": "أخذ آخر عنوان في سلسلة X-Forwarded-For (الملحق من البروكسي الموثوق) أو استخدام req.socket.remoteAddress مع ضبط عدد قفزات البروكسي المعروفة، وتوثيق ذلك في التشغيل على Render."
+  },
+  {
+    "id": "BE-4",
+    "file": "lib/http.js",
+    "line": 237,
+    "severity": "medium",
+    "category": "تشغيل",
+    "problem": "RateLimiter وخانة محاولات الدخول في lib/auth.js:95 خرائط Map بلا سقف للذاكرة أو إخلاء دوري؛ مفاتيحها مشتقة من IP قابل للتزييف (BE-3) واسم مستخدم حر، فيمكن ضخ مفاتيح لا نهائية ونمو الذاكرة بلا حدود في عملية طويلة العمر على Render.",
+    "reason": "class RateLimiter يضيف سجلا لكل مفتاح جديد في hit() ولا يوجد إخلاء إلا عبر reset() اليدوي الذي لا يُستدعى من أي مسار؛ كذلك loginFailed في lib/auth.js:110 يضع سجلا لكل (ip|username) بلا حد للحجم. نمط معاكس سليم موجود في lib/workspace.js:308-322 (publicLimit يُنظّف ذاته عند تجاوز 10000 مفتاح). الأثر: استهلاك ذاكرة متعمد قد يُسقط الخدمة.",
+    "evidence": "export class RateLimiter {\n  constructor() { this.hits = new Map(); }\n  hit(key, max, windowMs) {\n    const now = Date.now();\n    const rec = this.hits.get(key);\n    if (!rec || now - rec.start > windowMs) {\n      this.hits.set(key, { count: 1, start: now });",
+    "suggestion": "سقف للحجم مع إخلاء أقدم/منتهي المفاتيح دوريًا (كما في publicLimit)، وربط المفتاح ببصمة أكثر ثباتًا من قيمة XFF الأولى."
+  },
+  {
+    "id": "BE-5",
+    "file": "lib/api.js",
+    "line": 167,
+    "severity": "medium",
+    "category": "التحقق من المدخلات",
+    "problem": "createRequestApi يمرر body.source كما هو إلى INSERT دون تحقق نوع أو طول؛ كائن أو مصفوفة JSON تسبب فشل ربط في node:sqlite وخطأ 500 على مسار عام، والنص الحر غير المحدود يُخزن في requests.source وlead_origin.",
+    "reason": "السطر `source: body.source || 'website'` يمرر القيمة دون String() أو قائمة سماح، وتتحقق validateRequest من الحقول الأخرى لا من source. تحقق تنفيذي في هذا الفحص: run({x:1}) على DatabaseSync يرفض الكائن كمعامل مسمى (Error ERR_INVALID_STATE 'Unknown named parameter')، فالطلب الصالح شكليًا بمصدر كائن يرمي خطأ غير متوقع يعالجه handleError كـ 500 عام.",
+    "evidence": "const result = createRequest(db, type, body, { ip: clientIp(req), userAgent: req.headers['user-agent'], source: body.source || 'website', clientId: ctx.clientUser?.id });",
+    "suggestion": "قائمة سماح للمصدر (website/whatsapp/phone/email/branch/referral/other) أو على الأقل String(body.source).trim().slice(0, 30) قبل الاستخدام، وإرجاع 422 بدل 500."
+  },
+  {
+    "id": "BE-6",
+    "file": "server.js",
+    "line": 409,
+    "severity": "improvement",
+    "category": "أمن",
+    "problem": "بوابة CSRF للمسارات غير GET: قبول أي Origin ينتهي بنص المضيف عبر origin.endsWith(host) (مثل https://evil-laurette.com لمضيف laurette.com)، وقبول الطلب بمجرد رأس x-requested-with بغض النظر عن الأصل.",
+    "reason": "الأثر العملي محدود لأن كوكي الأدمن والعميل SameSite=Strict (lib/api.js:52 وlib/client-api.js:9) وكوكي الجلسة لن يُرسل في طلب عابر للموقع، والرؤوس المخصصة تستلزم preflight لا يجيبه الخادم؛ لكن بوابتهما معيبة منطقيًا ومقارنة بفحص الأصل الصارم في lib/workspace.js:132-137. تصنيف تحسين دفاع متقدم لا ثغرة قابلة للاستغلال المباشر.",
+    "evidence": "const sameOrigin = !origin || origin === baseUrl || (origin && req.headers.host && origin.endsWith(req.headers.host));\n        // The bridge uses its own Bearer credential and does not authenticate with cookies.\n        const extensionBridge = req.method === 'POST' && pathname === WHATSAPP_BRIDGE_PATH &&\n          /^chrome-extension:\\/\\/[a-p]{32}$/.test(origin || '');\n        if (requestedWith !== 'fetch' && !sameOrigin && !extensionBridge) {",
+    "suggestion": "استبدال endsWith بمقارنة أصل كامل `origin === new URL('http://' + host).origin` كما في workspace.js، وعدم جعل x-requested-with وحده كافيًا."
+  },
+  {
+    "id": "BE-7",
+    "file": "server.js",
+    "line": 316,
+    "severity": "improvement",
+    "category": "أمن",
+    "problem": "serveStatic يقبل أي مسار ملف تبدأ سلسلته بمجلد public كبادئة نصية دون فاصل مسار، فيقبل نظريًا مجلدًا شقيقًا مثل public-secret؛ لا يوجد حاليًا مجلد شقيق مماثل فلا كشف فعلي، لكن الفحص يجب أن يشمل الفاصل.",
+    "reason": "`file.startsWith(resolve(PUBLIC_DIR))` يجعل `C:\\...\\public-secret\\x` مطابقًا للبادئة `C:\\...\\public`؛ وصولاً إلى ذلك يحتاج مسارا يبدأ بـ /assets/ أو /media/ (server.js:394) ومجلد شقيق موجود على القرص. خروج عن الجذر نفسه (مثل data/laurette.db) محجوب حاليًا لأن المسار المطلق لن يبدأ بمجلد public.",
+    "evidence": "const rel = normalize(pathname).replace(/^([/\\\\])+/, '');\n    const file = resolve(PUBLIC_DIR, rel);\n    if (!file.startsWith(resolve(PUBLIC_DIR))) return false;",
+    "suggestion": "المقارنة ببادئة تشمل الفاصل: `resolve(PUBLIC_DIR) + sep` أو التحقق عبر path.relative ورفض ما يبدأ بـ '..'."
+  },
+  {
+    "id": "BE-8",
+    "file": "server.js",
+    "line": 52,
+    "severity": "improvement",
+    "category": "تشغيل",
+    "problem": "ensureAdminPassword يكتب كلمة مرور المدير نصًا صريحًا في data/admin-credentials.txt عند غياب ADMIN_PASSWORD، والملف يبقى بعد تغيير كلمة المرور؛ الملف موجود فعلاً (182 بايت) وفق قائمة مجلد data.",
+    "reason": "الملف غير قابل للوصول عبر HTTP لأن الملفات الثابتة محصورة في /assets/ و/media/ (server.js:394)، لكنه سر نصي على القرص وفي النسخ الاحتياطية، وتُعاد قراءته عند كل إقلاع (localAdminPassword) لاستخدامها في البذر. تصنيف improvement لأن الأثر تشغيلي/نظافة أسرار لا اختراق مباشر.",
+    "evidence": "function ensureAdminPassword() {\n  const file = join(HERE, 'data', 'admin-credentials.txt');\n  const generated = randomBytes(9).toString('base64url');\n  const body = `لوريت — بيانات دخول لوحة الإدارة\\nاسم المستخدم: laurette\\nكلمة المرور المؤقتة: ${generated}\\nغيّرها بعد أول تسجيل دخول.\\n`;\n  try {\n    mkdirSync(join(HERE, 'data'), { recursive: true });\n    writeFileSync(file, body, 'utf8');",
+    "suggestion": "اشتراط ADMIN_PASSWORD في بيئة الإنتاج حصرًا، وحذف ملف بيانات الدخول تلقائيًا بعد أول تسجيل دخول ناجح أو تخزين بصمة لا النص."
+  },
+  {
+    "id": "BE-9",
+    "file": "lib/api.js",
+    "line": 298,
+    "severity": "improvement",
+    "category": "أمن",
+    "problem": "assistantApi يقبل أي sessionId من الطالب فتُسجل رسائله في جلسة طرف آخر (تلوث سجل محادثة الغير التي يراها الإدمن)، وتُسجل الرسائل حتى مع consent=false ما دامت الجلسة موجودة، بخلاف الغرض التصريحي للموافقة.",
+    "reason": "السطر 298 يقتطع sid الممرر من الجسم ويستخدمه مفتاحا في assistant_sessions، وensureSession في lib/assistant.js:106-117 تنشئ الجلسة وتحدّثها بغض النظر عن قيمة consent عند توفر sid، ثم logMessage في السطرين 301 و303 يسجل مستخدم/مساعد. لا تسرب بيانات (السجلات للإدارة فقط عبر assistantLog مع نطاق organization)، لكن نزاهة السجل والموافقة معرضتان.",
+    "evidence": "let sid = String(body.sessionId || '').slice(0, 60) || null;\n  if (consent && !sid) sid = randomToken(12);\n  const session = ensureSession(db, sid, consent);\n  if (session) logMessage(db, session.id, 'user', message, null, null);",
+    "suggestion": "إصدار sid من الخادم فقط بعد consent والتحقق من ملكيته برمز سري، وحظر logMessage عندما consent=false حتى لو توفر sid."
+  },
+  {
+    "id": "BE-10",
+    "file": "server.js",
+    "line": 378,
+    "severity": "improvement",
+    "category": "أداء",
+    "problem": "لكل طلب — حتى ملفات /assets/ و/media/ الثابتة التي تُخدم بعده مباشرة — تُنفذ sessionUser وclientSessionUser وgetSettings وtrackingFlags كاستعلامات SQLite متكررة قبل أي فرع للتوجيه.",
+    "reason": "الأسطر 378-381 تقرأ الجلستين وكل صفوف settings من القاعدة في بداية handle()، بينما فرع الملفات الثابتة في 393-399 لا يحتاج أيا منها. على مسار موقع عام هذا عبء غير ضروري على كل أصل ثابت. تصنيف improvement لأنه أداء لا أمن.",
+    "evidence": "const user = sessionUser(db, token);\n    const clientUser = clientSessionUser(db, clientToken);\n    const settings = getSettings(db);\n    const tracking = trackingFlags(settings);",
+    "suggestion": "تقديم فحص /assets/ و/media/ قبل قراءة الجلسة والإعدادات، وتخزين الإعدادات مؤقتًا في الذاكرة مع إبطال عند تحديثها عبر /api/admin/settings."
+  },
+  {
+    "id": "BE-11",
+    "file": "lib/auth.js",
+    "line": 9,
+    "severity": "improvement",
+    "category": "أداء",
+    "problem": "hashPassword وverifyPassword تستخدمان scryptSync داخل حلقة الأحداث؛ كل محاولة دخول أو تحقق OTP تحجب الخادم بالكامل خلال الحساب، ومحاولات متزامنة من عناوين متعددة تجمع أثر الحجب.",
+    "reason": "SCRYPT مع N=16384 في سطر 6 وحساب متزامن في السطرين 9 و16؛ حدود المعدل تخفف الأثر لكل IP لكنها قابلة للتجاوز عبر BE-3، والاستدعاء المتزامن يجمّد معالجة بقية الطلبات خلال كل عملية scrypt. تصنيف improvement لأن التصميم الصحيح تشفيرًا (scrypt مع ملح لكل مستخدم وtimingSafeEqual) موجود.",
+    "evidence": "export function hashPassword(password, salt = randomBytes(16).toString('hex')) {\n  const hash = scryptSync(String(password), salt, 64, SCRYPT).toString('hex');\n  return { hash, salt };\n}",
+    "suggestion": "استخدام crypto.scrypt غير المتزامن داخل وعد أو worker thread لعمليات التحقق، مع إبقاء المعاملات كما هي."
+  }
+]

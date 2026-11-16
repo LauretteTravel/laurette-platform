@@ -1,0 +1,199 @@
+{
+  "meta": {
+    "audit": "فحص قاعدة البيانات SQLite — منصة لوريت (laurette-platform)",
+    "date": "2026-11-13",
+    "database": "data/laurette.db",
+    "driver": "node:sqlite DatabaseSync (Node v24.20.0)",
+    "entry": "server.js → createApp → openDb (اتصال واحد مشترك لكل العملية)",
+    "rules": "فحص قراءة فقط؛ لم يُنفَّذ أي استعلام تعديل؛ لم يُعدَّل أي ملف موجود"
+  },
+  "checksRun": [
+    "node:sqlite readOnly على data/laurette.db: PRAGMA journal_mode = wal؛ PRAGMA busy_timeout = 0 على اتصال جديد؛ PRAGMA quick_check = ok؛ جردها الفعلي: 27 فهرسًا مطابقًا لقائمة SCHEMA + idx_requests_client/deal/org/intake_branch/users_org؛ أحجام الجداول: laurette.db = 753664 بايت، أكبر الجداول programs=75 صفًا، requests=0، customers=0، tracking_events=0، sessions=1",
+    "فحص خيار timeout في node:sqlite: اتصال :memory: خالص أظهر busy_timeout الافتراضي = 0، وnew DatabaseSync(':memory:', { timeout: 3000 }) مقبول في Node v24.20.0 لكنه غير مستخدم في lib/db.js",
+    "EXPLAIN QUERY PLAN (اتصال readOnly) لثمانية استعلامات: SCAN whatsapp_outbox لـ UPDATE WHERE message_id؛ SCAN request_follow_ups + TEMP B-TREE لـ WHERE request_id؛ SCAN c + TEMP B-TREE لـ ORDER BY customers.updated_at؛ SCAN sessions لـ DELETE expires_at؛ SCAN requests لـ COUNT payload LIKE؛ SCAN r لبحث LIKE؛ SEARCH idx_requests_status لمرشح julianday في overview؛ CORRELATED SCALAR SUBQUERY لكل صف في قائمة العملاء",
+    "grep لكامل استعلامات SQL في lib/ (api.js, workspace.js, domain.js, assistant.js, client-api.js, client-auth.js, auth.js, whatsapp.js, whatsapp-bridge.js, whatsapp-chat-analytics.js, db.js, workspace-db.js, views/*)",
+    "قراءة server.js وrender.yaml عبر PowerShell Get-Content (رفض قارئ الملفات لأنهما hardlinks)",
+    "جرد tools/: لا يوجد أي سكربت نسخ احتياطي للقاعدة؛ .gitignore يستثني data/*.db وdata/*.db-wal وdata/admin-credentials.txt",
+    "Select-String على server.js وlib/: لا استيراد لأي ملف من legacy/ في التشغيل الفعلي (أول ظهور لـ legacy هو أسماء أعمدة مثل legacy_id/legacy_name)",
+    "توثيق Render الرسمي (https://render.com/docs/disks وhttps://render.com/docs/deploys): نظام الملفات مؤقت افتراضيًا وتُفقد التغييرات مع كل نشر/إعادة تشغيل؛ الأقراص الدائمة تتطلب خطة مدفوعة ولخدمة واحدة فقط؛ يوصى بنسخ احتياطي منتظم لقواعد البيانات المبنية على قرص"
+  ],
+  "findings": [
+    {
+      "id": "DB-1",
+      "file": "render.yaml",
+      "line": 27,
+      "severity": "critical",
+      "category": "تشغيل",
+      "problem": "النشر على Render يجعل data/laurette.db عرضة للفقد الكامل: بلا قرص دائم تُمسح القاعدة مع كل إعادة نشر/إعادة تشغيل، ومع القرص المعرَّف يطغى التثبيت على مجلد data/ فيخفي seed.json المطلوب في الإقلاع، ولا يوجد أي آلية نسخ احتياطي في المشروع.",
+      "evidence": "render.yaml:27 mountPath: /opt/render/project/src/data (داخل مجلد المصدر /opt/render/project/src) و:25-28 قرص 1GB و:1-3 تعليق الملف نفسه: «الخطة المجانية بلا قرص دائم، لذلك الطلبات ستُمحى مع كل إعادة نشر»؛ server.js:67 dbFile = options.dbFile || process.env.DB_FILE || join(HERE,'data','laurette.db') (لا يضبط render.yaml أي DB_FILE)؛ server.js:72 loadSeed(join(HERE,'data','seed.json')) مطلوب في الإقلاع ويفشل غيابه (lib/db.js:861-865)؛ .gitignore يستثني data/*.db (لا نسخة في المستودع)؛ جرد tools/ بلا أي سكربت نسخ احتياطي؛ توثيق Render: «By default, Render services have an ephemeral filesystem… lost every time the service redeploys or restarts» و«If you use a persistent disk specifically to back a custom database instance… create regular backups of your database» (https://render.com/docs/disks)؛ كما أن server.js لا يعالج SIGTERM (Select-String: لا SIGTERM في server.js) بينما يرسل Render SIGTERM عند كل نشر (https://render.com/docs/deploys).",
+      "impact": "أي إعادة نشر بلا قرص دائم تمحو الطلبات والعملاء والحجوزات والدفعات بالكامل ولا وسيلة استعادة؛ وعند تفعيل القرص كما هو معرَّف فإن أول إقلاع على قرص فارغ يخفي محتوى data/ الموجود في المستودع (منها seed.json وadmin-credentials.txt) خلف نقطة التثبيت ويفشل الخادم قبل فتح القاعدة؛ لقطة القرص اليومية في Render قد تعيد SQLite لحالة تالفة بحسب تحذير التوثيق نفسه لقواعد البيانات المبنية على قرص.",
+      "recommendation": "نقل ملفات القاعدة خارج مجلد المصدر (مثل /var/data/laurette.db مع ضبط DB_FILE كمتغير بيئة معلن في render.yaml) أو الانتقال لقاعدة مُدارة؛ إضافة نسخة احتياطية دورية (sqlite .backup أو dump مجدول) ترفع لمخزن خارجي؛ إضافة معالج SIGTERM يستدعي app.close() (يغلق db في server.js:485)."
+    },
+    {
+      "id": "DB-2",
+      "file": "lib/db.js",
+      "line": 538,
+      "severity": "critical",
+      "category": "تشغيل",
+      "problem": "هجرات إقلاع تلفية بلا لقطة احتياطية: DROP TABLE requests (وبالمثل DROP TABLE bookings) داخل وصفة نسخ الجدول — محمية بشروط وBEGIN IMMEDIATE، لكن دون أخذ لقطة قبل الهجرة، والفهارس الأربعة على requests تُفقد حتى إعادة التشغيل التالية.",
+      "evidence": "lib/db.js:530-547: BEGIN IMMEDIATE ثم DROP TABLE IF EXISTS requests_new (:531) وDROP TABLE requests (:538) وALTER TABLE requests_new RENAME (:539) بشرط فحص غياب 'cruise' في sqlite_master (:526-528)؛ lib/workspace-db.js:14-15: INSERT INTO bookings_workspace_new SELECT * ثم DROP TABLE bookings بشرط marker workspace_schema؛ الفهارس idx_requests_status/type/created/customer تُنشأ في SCHEMA قبل فحص الهجرة فتسقط مع الجدول القديم، ولا يُعاد إنشاؤها إلا في إقلاع لاحق (إعادة إنشاء الفهارس بعد الهجرة الحالية تغطي client/deal/org/intake فقط — lib/db.js:695-701)؛ لا يوجد أي نسخ احتياطي قبل الهجرة (انظر DB-1).",
+      "impact": "خطر مباشر على البيانات الحية عند كل ترقية من مخطط قديم (تعطل منتصف الهجرة يتراجع بالمعاملة، لكن فشلًا منطقيًا بعد COMMIT لا تراجع له ولا لقطة للعودة)؛ وعلى أول إقلاع بعد هجرة requests تعمل الاستعلامات بلا الفهارس الأربعة (مسح كامل) حتى النشر التالي.",
+      "recommendation": "أخذ لقطة إلزامية قبل أي هجرة DROP-based (VACUUM INTO أو نسخ الملف) مع retention قصير، وإعادة إنشاء كل فهارس الجدول داخل المعاملة نفسها بعد RENAME، واختبار الهجرات على لقطة من قاعدة الإنتاج الفعلية."
+    },
+    {
+      "id": "DB-3",
+      "file": "lib/db.js",
+      "line": 757,
+      "severity": "medium",
+      "category": "تشغيل",
+      "problem": "عند تغيّر seed_version تُمسح جداول المحتوى بالكامل (DELETE FROM programs/offers/news/reviews/destinations/hotel_guides/airlines/trip_ideas/articles/faq/visa_rules/kb_docs) وتُعاد من seed.json — أي تعديل أُجري من لوحة الإدارة على هذه الجداول يُفقد.",
+      "evidence": "lib/db.js:749-782: marker = meta.seed_version؛ عند عدم التطابق تنفَّذ insertAll داخل transaction: 12 عبارة DELETE (:755-768) ثم إعادة إدراج كل محتوى seed.json؛ نفس الجداول تُعدَّل من لوحة الإدارة عبر lib/api.js createResource/updateResource/deleteResource (:1199-1262).",
+      "impact": "فقدان محتوى معدَّل يدويًا (برامج، عروض، مقالات) عند أي bump لنسخة الـ seed في نشر لاحق، دون تحذير أو نسخة سابقة.",
+      "recommendation": "تحويل البذر إلى إضافة-فقط (UPSERT بمفتاح طبيعي) أو حصر الـ DELETE في صفوف تديرها الـ seed بمعرّفات ثابتة، وتوثيق سلوك bump في README."
+    },
+    {
+      "id": "DB-4",
+      "file": "lib/db.js",
+      "line": 521,
+      "severity": "medium",
+      "category": "تشغيل",
+      "problem": "لا busy_timeout ولا خيار timeout عند فتح الاتصال — أول تزاحم مع أي كاتب خارجي يرجع SQLITE_BUSY / database isLocked فوريًا دون أي انتظار.",
+      "evidence": "lib/db.js:519-521: new DatabaseSync(file) بلا خيارات؛ فحص فعلي: PRAGMA busy_timeout = 0 على اتصال جديد، وخيار { timeout: 3000 } مقبول في Node v24.20.0 لكنه غير مستخدم؛ لا يوجد ذكر لbusy_timeout في أي ملف (grep)؛ كتّاب خارجيون محتملون: tools/reset-admin.mjs:8 يفتح data/laurette.db مباشرة (مسار نسبي لـ cwd)، وأي تشغيل يدوي لأدوات verify/smoke على القاعدة الحية.",
+      "impact": "رسائل database is locked وأخطاء 500 مفاجئة عند تداخل أي عملية كتابة خارجية مع الخادم؛ لا طبقة إعادة محاولة.",
+      "recommendation": "فتح بقاعدة { timeout: 5000 } أو تنفيذ PRAGMA busy_timeout = 5000 بعد الفتح، ومنع تشغيل أدوات الكتابة على نفس ملف القاعدة أثناء تشغيل الخادم، وتوثيق مسار مطلق للقاعدة في الأدوات."
+    },
+    {
+      "id": "DB-5",
+      "file": "lib/db.js",
+      "line": 728,
+      "severity": "medium",
+      "category": "تشغيل",
+      "problem": "transaction() يفتح BEGIN مؤجلًا (deferred) — ترقية القفل من قراءة إلى كتابة عند أول كتابة قد ترجع SQLITE_BUSY مع كاتب متزامن، بينما تستخدم هجرة openDb المتناقضة معها BEGIN IMMEDIATE.",
+      "evidence": "lib/db.js:727-736: db.exec('BEGIN') ثم fn ثم COMMIT/ROLLBACK؛ مقابل db.js:530 BEGIN IMMEDIATE في هجرة requests؛ transaction مستخدمة في seedDatabase (db.js:782) وworkspace.js:294/305/326 (دفعات، قسائم، أحداث العرض).",
+      "impact": "فشل معاملات كتابة مركّبة (تسجيل دفعة، قسيمة، إعادة بذر) تحت أي تزامن خارجي رغم تفعيل WAL؛ مع busy_timeout=0 (DB-4) الفشل فوري.",
+      "recommendation": "اعتماد BEGIN IMMEDIATE لكل المعاملات الكتابية في transaction() وأي كتابة مركّبة، وحصر BEGIN المؤجل في القراءات طويلة الأمد إن وجدت."
+    },
+    {
+      "id": "DB-6",
+      "file": "lib/client-api.js",
+      "line": 179,
+      "severity": "medium",
+      "category": "أداء",
+      "problem": "نمط N+1 داخل حلقة: clientBookings ينفذ COUNT ثم استعلام صفحة ثم publicStatus لكل مرجع على حدة (استعلامان لكل صف) — نحو 51 استعلامًا لنداء واحد بصفحة كاملة.",
+      "evidence": "lib/client-api.js:170-179: :173 SELECT COUNT(*) FROM requests WHERE client_id، :176-177 استعلام صفحة LIMIT 25، :179 rows.map(({reference}) => publicStatus(ctx.db, reference))؛ publicStatus في lib/domain.js:412-414 ينفذ استعلامين لكل استدعاء (صف الطلب + أحداثه).",
+      "impact": "حمل مضاعف على كل نداء /api/client/bookings يتناسب مع حجم الصفحة، مع إعادة تحضير كل عبارة في كل مرة (انظر DB-14).",
+      "recommendation": "استعلام واحد يجلب الطلبات بـ IN/JOIN مع الأحداث المسموح عرضها (kind IN) مرتبة، وحساب العدد في الاستعلام نفسه."
+    },
+    {
+      "id": "DB-7",
+      "file": "lib/workspace.js",
+      "line": 160,
+      "severity": "medium",
+      "category": "أداء",
+      "problem": "قائمة workspace الرئيسية تفرز على تعبير json_extract(payload,'$.stage') مع استعلامات مترابطة لكل صف (COUNT لأحداث offer-viewed وMIN لدوائر المتابعة) وترحيل OFFSET — مسح وترتيب غير قابلين للفهرسة في كل صفحة.",
+      "evidence": "lib/workspace.js:153-160: WHERE يضم EXISTS على workspace_offers/bookings/pnr، ORDER BY CASE json_extract(r.payload,'$.stage') … + MIN(30,(SELECT COUNT(*)*5 …)) DESC, r.updated_at DESC LIMIT 30 OFFSET ?؛ الاستعلامات المترابطة في :156-158 (COUNT/MAX/MIN لكل صف من الجداول request_events وrequest_follow_ups).",
+      "impact": "كلفة تتناسب مع إجمالي الطلبات × الأحداث في كل عرض صفحة workspace، ويتفاقم مع الترحيل العميق؛ JSON في payload يمنع أي فهرس على مرحلة الصفقة.",
+      "recommendation": "استخراج stage وopens إلى أعمدة فعلية تُحدَّث عند الكتابة/حدث العرض مع فهارس، وترقيم بمفتاح (keyset pagination) بدل OFFSET."
+    },
+    {
+      "id": "DB-8",
+      "file": "lib/api.js",
+      "line": 327,
+      "severity": "medium",
+      "category": "أداء",
+      "problem": "COUNT وتجميعات متكررة لكل طلب: overview ينفذ نحو 10 استعلامات تجميعية منفصلة على requests في كل نداء، وreports كذلك، والصفحات العامة تعيد COUNT نفسها في كل عرض صفحة — بلا أي تخزين مؤقت.",
+      "evidence": "lib/api.js:317-342: total/today/followUps/overdue/customers/quotes/sources/last7 — كل مقياس استعلام مستقل، وفولو-أب/المتأخرة بمرشحات julianday على created_at/updated_at؛ reports من :376 إلى :530 (تجميعات يومية وأقسام وفروع)؛ الصفحات العامة: lib/views/public.js:102-104 و:235-238 و:259 (COUNT داخل القالب نفسه) وlib/views/public2.js:707-709.",
+      "impact": "مع نمو requests تتحول كل لوحة نظرة عامة وكل صفحة رئيسية عامة إلى سلسلة مسحات كاملة متكررة لكل زائر.",
+      "recommendation": "دمج التجميعات في استعلام واحد أو تخزينها مؤقتًا (TTL قصير أو إبطال عند تغيّر الطلبات)، وحساب مقاييس الأيام من فهرس created_at بدل دوال julianday على الصفوف."
+    },
+    {
+      "id": "DB-9",
+      "file": "lib/whatsapp.js",
+      "line": 186,
+      "severity": "improvement",
+      "category": "أداء",
+      "problem": "فهارس مفقودة على مفاتيح بحث فعلية: whatsapp_outbox.message_id وrequest_follow_ups.request_id وcustomers.updated_at (فرز القائمة) وsessions.expires_at (التنظيف) — كلها SCAN مؤكدة بـ EXPLAIN QUERY PLAN.",
+      "evidence": "EXPLAIN على data/laurette.db (readOnly): «SCAN whatsapp_outbox» لـ UPDATE … WHERE message_id = ? (lib/whatsapp.js:186 receiveStatus في كل حدث حالة webhook)؛ «SCAN request_follow_ups + TEMP B-TREE» لـ WHERE request_id (استعلامات lib/workspace.js:189 و:258 و:262 و:285؛ الفهرس الوحيد idx_request_follow_ups_due على status/due_at/assigned_to)؛ «SCAN c + TEMP B-TREE» لـ ORDER BY c.updated_at DESC LIMIT 100 (lib/api.js:1036)؛ «SCAN sessions» لـ DELETE expires_at < ? (lib/auth.js:78)؛ قائمة الفهارس الفعلية (27) لا تتضمن أيًا منها.",
+      "impact": "مسحات كاملة تتناسب مع حجم الجداول في مسار webhook وصفحات القوائم والتنظيف؛ حاليًا الجداول صغيرة فالأثر محدود، لكنها نقاط التوسع الأولى.",
+      "recommendation": "CREATE INDEX على whatsapp_outbox(message_id) وrequest_follow_ups(request_id) وcustomers(updated_at) وsessions(expires_at) وclient_sessions(expires_at)."
+    },
+    {
+      "id": "DB-10",
+      "file": "lib/api.js",
+      "line": 597,
+      "severity": "improvement",
+      "category": "أداء",
+      "problem": "بحث بعلامة بادئة %…% على مرجع/ملخص/عنوان واسم/هاتف العميل (غير قابل للفهرسة)، وعدّ البرامج المرتبطة بـ LIKE على payload، ومسح كامل لجدول customers بلا WHERE مع تصفية في JS.",
+      "evidence": "lib/api.js:596-600: LIKE %search% على r.reference/r.summary/r.title/c.name/c.phone؛ lib/api.js:1033-1035 بحث العملاء بنفس النمط؛ lib/api.js:1255 COUNT WHERE payload LIKE '%programSlug:…%' عند حذف برنامج؛ EXPLAIN: «SCAN r» و«SCAN requests»؛ lib/whatsapp.js:169: q(db, 'SELECT id, phone FROM customers') بلا WHERE بلا LIMIT ثم normalizeRecipient لكل صف عند كل رسالة إيقاف اشتراك.",
+      "impact": "بطء متزايد في /api/admin/requests?q= وlistCustomers وdeleteResource لبرامج مرتبطة بطلبات، وفي كل webhook إيقاف اشتراك مع نمو العملاء.",
+      "recommendation": "FTS5 للبحث النصي أو مطابقة تامة على مرجع/هاتف مفهرسين، وحفظ هاتف العميل مُوحّد التنسيق عند الكتابة ليصبح استعلام إيقاف الاشتراك WHERE مفهرسًا."
+    },
+    {
+      "id": "DB-11",
+      "file": "lib/views/public2.js",
+      "line": 42,
+      "severity": "improvement",
+      "category": "أداء",
+      "problem": "قوائم عامة بلا LIMIT تجلب كل الصفوف (offers وvisa_rules وdestinations وarticles وfaq وnews)، وبوابة المساعد تحمّل جداول كاملة ثم يقص في JS.",
+      "evidence": "lib/views/public2.js:42 (كل العروض النشطة)، :313 (كل visa_rules)، :444 (كل الوجهات)، :561 (كل المقالات)، :639 (كل الأسئلة)، :782 (كل الأخبار)؛ lib/assistant.js:125 و:226 و:241 و:317 (برامج ORDER BY price_from ثم slice(0, 40) في JS)؛ مقارنةً: listResource الإدارية تستخدم LIMIT 500 (lib/api.js:1182).",
+      "impact": "الصفحات العامة والمساعد يستهلكان ذاكرة/وقتًا يتناسب مع كل المحتوى لا مع المعروض؛ يتفاقم مع كل إضافة محتوى من لوحة الإدارة.",
+      "recommendation": "LIMIT صريح لكل قائمة عامة وتحديد الأعمدة بدل SELECT *، ونقل القص إلى SQL."
+    },
+    {
+      "id": "DB-12",
+      "file": "lib/api.js",
+      "line": 758,
+      "severity": "improvement",
+      "category": "معالجة أخطاء",
+      "problem": "تدفقات كتابة متعددة العبارات لا تُغلَّف بمعاملة واحدة (تحديث الطلب ومالكيه، الرد على التحويل، تعطيل اشتراك واتساب، تحديث الحجز وتفاصيله) — مخاطر كتابة جزئية عند الانقطاع وكلفة fsync لكل عبارة.",
+      "evidence": "lib/api.js:747-843 updateRequest (سلسلة UPDATE requests + INSERT request_owner_history متتالية)، :966-995 respondRequestTransfer (UPDATE transfers ثم UPDATE requests ثم عدة INSERT owner_history)، lib/whatsapp.js:169-176 disableCustomerWhatsApp (UPDATE لكل مطابقة داخل حلقة)، lib/workspace.js:283-287 (UPDATE bookings ثم requests ثم follow_ups ثم booking_details)؛ بالمقابل تغليف صحيح موجود في workspace.js:294 و:305 وwhatsapp-bridge عبر ON CONFLICT.",
+      "impact": "حالة غير متسقة بين requests وrequest_owner_history/request_transfers/workspace_booking_details عند فشل منتصف التدفق، وكتابات لا ذرية لها.",
+      "recommendation": "تغليف كل تدفق كتابة مركّب في transaction(db, …) (مع DB-5: BEGIN IMMEDIATE)."
+    },
+    {
+      "id": "DB-13",
+      "file": "server.js",
+      "line": 75,
+      "severity": "medium",
+      "category": "تشغيل",
+      "problem": "لا سياسة احتفاظ أو تنظيف دوري: جلسات العملاء لا تنظيف دفعي لها إطلاقًا، وtracking_events وaudit_log وassistant_sessions/assistant_messages تراكم بلا حذف، وجلسات الإدارة تُنظف عند الإقلاع فقط.",
+      "evidence": "server.js:75 purgeExpiredSessions مرة واحدة عند createApp؛ lib/auth.js:77-78 (DELETE expires_at < ?)؛ lib/client-auth.js:27-31 يحذف الجلسة المنتهية فقط عند إعادة تقديم نفس الرمز؛ إدراج تراكمي: lib/api.js:566 (tracking_events لكل حدث تتبع حتى 300/ساعة/IP)، audit (lib/domain.js:553 لكل فعل إداري)، assistant (lib/assistant.js:73 لكل رسالة)؛ مساحة القرص على Render محدودة (render.yaml:28 حجم 1GB).",
+      "impact": "نمو غير محدود لهذه الجداول يملأ قرصًا صغيرًا ويوقف الكتابات فجأة، ويزيد كلفة المسحات في الاستعلامات التي تلمسها.",
+      "recommendation": "تنظيف دوري داخل عامل قائم (مثل دورة عامل واتساب كل ساعة) بحدود احتفاظ معلنة لكل جدول (مثل 90 يومًا للأحداث والتتبع)."
+    },
+    {
+      "id": "DB-14",
+      "file": "lib/db.js",
+      "line": 715,
+      "severity": "improvement",
+      "category": "أداء",
+      "problem": "إعادة تحضير كل عبارة في كل نداء بلا طبقة تخزين عبارات، وقراءة إعدادات وجلسات كاملة مع كل طلب بما فيه طلبات الملفات الساكنة.",
+      "evidence": "lib/db.js:715-725: q/one/exec تستدعي db.prepare(sql) في كل نداء (node:sqlite لا يخزن العبارات المحضرة تلقائيًا)؛ server.js:378-380: sessionUser + clientSessionUser + getSettings تُنفذ قبل فحص المسار الساكن، أي حتى لـ /assets و/media؛ getSettings تقرأ كل مفاتيح settings (lib/views/public.js:30-34 setting() بمفتاح لكل استدعاء) رغم أنها تتغير عبر PATCH إداري فقط (server.js:101 و:433 و:458 في مسارات الخطأ أيضًا).",
+      "impact": "حِمل ثابت إضافي على كل طلب (تحضير عبارات + قراءة إعدادات + استعلاما جلسة) في خادم متزامن أحادي الاتصال.",
+      "recommendation": "خريطة عبارات مُحضَّرة (Map) داخل طبقة db.js، وذاكرة مؤقتة للإعدادات تُبطَل عند updateSettings، وتقديم فحص الساكن قبل استعلامات الجلسة/الإعدادات."
+    },
+    {
+      "id": "DB-15",
+      "file": "lib/db.js",
+      "line": 591,
+      "severity": "improvement",
+      "category": "تشغيل",
+      "problem": "كل إقلاع ينفذ كتابات وتحديثات backfill على القاعدة (فروع، أقسام افتراضية، تحديثات على requests)، وحلقة departmentAliases مكررة حرفيًا مرتين، وفحوص PRAGMA table_info لنحو ثلاثين عمودًا.",
+      "evidence": "lib/db.js:587-591: INSERT OR IGNORE branches ثم UPDATE branches SET is_primary في كل إقلاع؛ :592-609 إدراج الأقسام الافتراضية؛ :616-637 و:646-658 حلقتا departmentAliases متطابقتان (UPDATE requests/users/departments)؛ :639-646 و:661 و:662-678 و:680-686 و:698-707 تحديثات backfill تمسح requests؛ :584-585 PRAGMA table_info ×~30؛ render.yaml:13 autoDeploy:true يعيد الإقلاع مع كل دمج.",
+      "impact": "إقلاع أبطأ وكتابات غير ضرورية عند كل نشر، وتداخل محتمل مع أي عملية خارجية على الملف لحظة النشر (مع DB-4 الفشل فوري).",
+      "recommendation": "marker في meta (مثل boot_migrations_version) لتخطي البذر والـ backfill بعد أول تشغيل ناجح، وحذف الحلقة المكررة، وإبقاء فحوص الأعمدة بأمر واحد pragma_table_list."
+    },
+    {
+      "id": "DB-16",
+      "file": "lib/db.js",
+      "line": 123,
+      "severity": "improvement",
+      "category": "معالجة أخطاء",
+      "problem": "قيود نزاهة مفقودة على أعمدة حرجة: requests.status وrequests.deal_status نص حر بلا CHECK، وassistant_messages.role بلا CHECK — الصحة تعتمد كليًا على طبقة التطبيق.",
+      "evidence": "lib/db.js:123-124 (status TEXT NOT NULL DEFAULT 'new' وdeal_status TEXT NOT NULL DEFAULT 'new' بلا CHECK) و:510 (role TEXT NOT NULL)؛ مقارنةً: requests.type مقيّد بـ CHECK (:130) وrequest_transfers.status وbookings.status مقيّدة (db.js وworkspace-db.js:25)؛ القيم تُكتب فعليًا من STATUSES في lib/domain.js لكن لا حماية على مستوى القاعدة.",
+      "impact": "أي قيمة حالة غريبة (سكربت أو مسار مستقبلي) تدخل القاعدة بلا رادع وتكسر التجميعات والفرز المنطقي ومفاتيح العرض في الواجهة.",
+      "recommendation": "إضافة CHECK للحالات المعروفة في هجرة قادمة (بأسلوب وصفة النسخ الآمنة الموجودة)، أو على الأقل تحقق مركزي عند الكتابة في طبقة db.js."
+    }
+  ],
+  "notes": "القاعدة الفعلية صغيرة وحالة تطوير (753KB؛ requests=0 صفوف) لذا ملاحظات الأداء تقديرات نمو مبنية على الشيفرة وخطط التنفيذ لا قياسات حمل؛ لم تُشغَّل طبقة التطبيق ولا الاختبارات في هذا الفحص. لم يُفحص كود wt-os/ وwhatsapp-openwa/ (حزمتان فرعيتان بشجرة مستقلة وليستا نقطة الدخول وفق package.json: start = node server.js)؛ legacy/ تحقق فقط أنها غير مستوردة في server.js وlib/. ملفات الجذر hardlinks (server.js، render.yaml، package.json) قُرئت عبر PowerShell كما تقتضي تعليمات المهمة. كل الاتصالات بالقاعدة كانت readOnly ولم يُنفذ أي استعلام تعديل؛ سكربتا الفحص المؤقتان كُتبا في %TEMP% خارج المشروع وحذف محتواهما غير مطلوب. التحقق من سلوك Render مسند إلى توثيقها الرسمي (render.com/docs/disks وrender.com/docs/deploys) لا لتجربة نشر فعلية، وسلوك طغيان نقطة التثبيت على محتوى data/ مستنتج من دلالات التثبيت الموثقة."
+}

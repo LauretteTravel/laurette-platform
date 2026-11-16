@@ -22,7 +22,11 @@ services:
       # اتركه فارغًا ليُستخدم RENDER_EXTERNAL_URL تلقائيًا للروابط القانونية
       - key: BASE_URL
         sync: false
+      # مسار ملف القاعدة على القرص الدائم (يقرأه server.js من process.env.DB_FILE)
+      - key: DB_FILE
+        value: /var/data/laurette/laurette.db
     disk:
       name: data
-      mountPath: /opt/render/project/src/data
+      # نقطة التثبيت خارج مجلد المصدر حتى لا يُخفي القرص data/seed.json المطلوب في الإقلاع
+      mountPath: /var/data/laurette
       sizeGB: 1

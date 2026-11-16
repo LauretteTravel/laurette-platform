@@ -1,0 +1,15 @@
+{
+  "name": "runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "wa-automate"
+  },
+  "engines": {
+    "node": ">=22.21.1"
+  },
+  "dependencies": {
+    "@open-wa/wa-automate": "5.9.7"
+  }
+}

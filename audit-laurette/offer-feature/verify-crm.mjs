@@ -1,0 +1,15 @@
+import { DatabaseSync } from 'node:sqlite';
+const db = new DatabaseSync('audit-laurette/offer-feature/qa-offer.db', { readOnly: true });
+const r = db.prepare('SELECT reference, type, assigned_to, sales_owner_id, branch_id, department, source, payload FROM requests ORDER BY id DESC LIMIT 1').get();
+const p = JSON.parse(r.payload);
+console.log('REQUEST:', JSON.stringify({ ref: r.reference, type: r.type, assigned: r.assigned_to, sales: r.sales_owner_id, branch: r.branch_id, dept: r.department, source: r.source }));
+console.log('payload:', JSON.stringify({ programSlug: p.programSlug, optionLabel: p.optionLabel, adults: p.adults, hasHash: !!p.hash, priceFromAtRequest: p.priceFromAtRequest }));
+const e = db.prepare('SELECT actor_name, kind, message FROM request_events ORDER BY id DESC LIMIT 2').all();
+console.log('EVENTS:', JSON.stringify(e));
+const t = db.prepare("SELECT event, path, meta FROM tracking_events ORDER BY id DESC LIMIT 3").all();
+console.log('TRACKING:', JSON.stringify(t));
+const v = db.prepare('SELECT slug, views_count FROM programs WHERE id = 151').get();
+console.log('VIEWS:', v.slug, v.views_count);
+const h = db.prepare('SELECT id, previous_value, next_value, note FROM request_owner_history ORDER BY id DESC LIMIT 1').get();
+console.log('OWNER_HISTORY:', JSON.stringify(h));
+db.close();
