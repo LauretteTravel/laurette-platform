@@ -1,22 +1,22 @@
-.brochures-hub{--bh-ink:#0b2a43;--bh-gold:#a8782c;--bh-line:#e2e8ed;background:#f6f8fa;color:var(--bh-ink)}
-.bh-hero{background:linear-gradient(270deg,#0b263ff5 10%,#0b263fb0 55%,#0b263f35),url('/media/hero/dest-istanbul.jpg') center 46%/cover;color:#fff;padding:clamp(3rem,8vw,7rem) 0}
+.brochures-hub{--bh-ink:var(--navy,#0b2a43);--bh-gold:var(--gold,#a8782c);--bh-line:var(--line,#e2e8ed);--bh-surface:var(--sand,#f6f8fa);background:var(--bh-surface);color:var(--bh-ink)}
+.bh-hero{background:linear-gradient(270deg,#062b28f5 10%,#062b28b8 55%,#062b2838),url('/media/hero/dest-istanbul.jpg') center 46%/cover;color:#fff;padding:clamp(3rem,8vw,7rem) 0}
 .bh-hero h1{color:inherit;font-size:clamp(2rem,5vw,4rem);line-height:1.25;margin:.6rem 0}
 .bh-hero p{margin:0;max-width:38rem;font-size:1.1rem}
-.bh-hero span{font-size:.8rem;letter-spacing:.14em;color:#f3ce8b}
+.bh-hero span{font-size:.8rem;letter-spacing:.14em;color:var(--gold-2,#f3ce8b)}
 .bh-catalogue{padding-block:2rem 4rem}
 .bh-search{display:flex;gap:.5rem;max-width:38rem;margin-top:.3rem}
-.bh-search input{min-width:0;flex:1;border:1px solid #adbcc9;border-radius:.7rem;background:white;padding:.65rem .9rem;font:inherit}
+.bh-search input{min-width:0;flex:1;border:1px solid var(--bh-line);border-radius:.7rem;background:white;padding:.65rem .9rem;font:inherit}
 .bh-tabs{display:flex;flex-wrap:wrap;gap:.55rem;margin:1.25rem 0}
 .bh-tabs button{font:inherit;padding:.55rem .9rem;border:1px solid var(--bh-line);border-radius:2rem;background:white;color:var(--bh-ink);cursor:pointer}
 .bh-tabs button[aria-pressed=true]{background:var(--bh-ink);color:white;border-color:var(--bh-ink)}
 .bh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,19rem),1fr));gap:1.25rem}
 .bh-card{background:white;border:1px solid var(--bh-line);border-radius:1rem;overflow:hidden;box-shadow:0 7px 24px #0b263f09;display:flex;flex-direction:column}
-.bh-cover{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#e2e9f0}
+.bh-cover{display:block;width:100%;height:auto;max-height:30rem;aspect-ratio:1/1;object-fit:contain;padding:.45rem;background:var(--bh-surface);border-bottom:1px solid var(--bh-line)}
 .bh-card-body{padding:1.1rem;flex:1;display:flex;flex-direction:column;align-items:flex-start}
 .bh-card h2{font-size:1.25rem;margin:.5rem 0 .25rem;overflow-wrap:anywhere}
-.bh-badge{background:#fbf1db;color:#6e4a15;border-radius:2rem;padding:.2rem .7rem;font-size:.8rem}
-.bh-muted{color:#50677d;margin:.18rem 0}
-.bh-price{color:#81571b;font-weight:800;margin:.7rem 0 1rem}
+.bh-badge{background:var(--gold-soft,#fbf1db);color:#5b451c;border-radius:2rem;padding:.2rem .7rem;font-size:.8rem}
+.bh-muted{color:var(--muted,#50677d);margin:.18rem 0}
+.bh-price{color:var(--bh-gold);font-weight:800;margin:.7rem 0 1rem}
 .bh-card-actions{width:100%;margin-top:auto;display:flex;gap:.5rem;flex-wrap:wrap}
 .bh-card-actions>*{flex:1;min-height:44px;white-space:nowrap}
 #brochure-more{margin-top:1.25rem}

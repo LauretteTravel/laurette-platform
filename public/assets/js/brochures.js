@@ -16,13 +16,29 @@ function element(tag, className, text) {
   return node;
 }
 
+function fileSize(bytes) {
+  const value = Number(bytes) || 0;
+  const format = new Intl.NumberFormat('ar-JO', { maximumFractionDigits: 1 });
+  if (value >= 1024 * 1024) return format.format(value / (1024 * 1024)) + ' ميغابايت';
+  return Math.max(1, Math.round(value / 1024)).toLocaleString('ar-JO') + ' كيلوبايت';
+}
+
 function download(link, url) {
   link.href = url;
   link.download = '';
   link.addEventListener('click', () => {
-    const original = 'تحميل البرنامج (PDF)';
+    if (link.dataset.busy) return;
+    const original = link.dataset.label || link.textContent;
+    link.dataset.label = original;
+    link.dataset.busy = '1';
+    link.setAttribute('aria-busy', 'true');
     link.textContent = 'جارٍ بدء التحميل…';
-    setTimeout(() => { link.textContent = original; }, 1300);
+    setTimeout(() => { link.textContent = '✓ بدأ التحميل'; }, 650);
+    setTimeout(() => {
+      link.textContent = original;
+      link.removeAttribute('aria-busy');
+      delete link.dataset.busy;
+    }, 2600);
   });
 }
 
@@ -44,14 +60,13 @@ function card(brochure, categories) {
   image.src = brochure.cover_image_url || '/media/brand/og-default.jpg';
   image.alt = '';
   image.width = 640;
-  image.height = 360;
+  image.height = 640;
   image.loading = 'lazy';
   const body = element('div', 'bh-card-body');
   body.append(element('span', 'bh-badge', categories[brochure.category]));
   body.append(element('h2', '', brochure.title));
   body.append(element('p', 'bh-muted', [brochure.destination, brochure.duration].filter(Boolean).join(' · ')));
-  const size = new Intl.NumberFormat('ar-JO', { maximumFractionDigits: 1 }).format(brochure.file_size / 1024);
-  body.append(element('p', 'bh-muted', 'PDF · ' + size + ' كيلوبايت'));
+  body.append(element('p', 'bh-muted', 'PDF · ' + fileSize(brochure.file_size)));
   body.append(element('p', 'bh-price', brochure.starting_price ? 'ابتداءً من ' + brochure.starting_price : 'السعر عند الاستفسار'));
   const actions = element('div', 'bh-card-actions');
   const direct = element('a', 'btn btn-primary', 'تحميل البرنامج (PDF)');
