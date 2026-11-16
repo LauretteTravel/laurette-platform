@@ -28,7 +28,7 @@ function compareHistorical(before,after,{migration=false}={}){
      if(digest(old)!==digest(current))throw new Error('Historical cell mismatch');rowCount++;
    }
  }
- if(migration){const extra=after.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r=>r.version);if(JSON.stringify(extra)!=='[1,2,3,4,5,6,7,8,9,10,11,12]')throw new Error('Unexpected migration ledger');}
+ if(migration){const extra=after.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map(r=>r.version);if(JSON.stringify(extra)!=='[1,2,3,4,5,6,7,8,9,10,11,12,13]')throw new Error('Unexpected migration ledger');}
  return {tables:names.length,rows:rowCount};
 }
 export function rehearsePrivateCopy({sourceFile,privateRoot,maxBytes=32*1024*1024}){
@@ -39,22 +39,22 @@ export function rehearsePrivateCopy({sourceFile,privateRoot,maxBytes=32*1024*102
  let live=new DatabaseSync(source,{readOnly:true});let version;
  try{check(live);version=live.prepare('PRAGMA user_version').get().user_version;if(![2,5,6,7,8,9].includes(version))throw new Error('Rehearsal requires version 2, 5, 6, 7, 8 or 9 source');}catch(error){live.close();throw error;}
  const directory=mkdtempSync(join(root,'phase2-private-rehearsal-'));chmodSync(directory,0o700);
- const pristine=join(directory,'source-v'+version+'.sqlite'),candidate=join(directory,'candidate-v12.sqlite'),restored=join(directory,'restored-v'+version+'.sqlite');
+ const pristine=join(directory,'source-v'+version+'.sqlite'),candidate=join(directory,'candidate-v13.sqlite'),restored=join(directory,'restored-v'+version+'.sqlite');
  try{live.prepare('VACUUM INTO ?').run(pristine);}finally{live.close();}
  chmodSync(pristine,0o600);copyFileSync(pristine,candidate);chmodSync(candidate,0o600);
  const original=new DatabaseSync(pristine,{readOnly:true});let upgraded;
  let report;
  try{
    check(original);upgraded=openDb(candidate);check(upgraded);
-   if(upgraded.prepare('PRAGMA user_version').get().user_version!==12)throw new Error('Upgrade did not reach version 12');
-   if(upgraded.migrationBackups.length!==12-version)throw new Error('Expected private snapshots for every new migration');
+   if(upgraded.prepare('PRAGMA user_version').get().user_version!==13)throw new Error('Upgrade did not reach version 13');
+   if(upgraded.migrationBackups.length!==13-version)throw new Error('Expected private snapshots for every new migration');
    const preservation=compareHistorical(original,upgraded,{migration:true});
    for(const backup of upgraded.migrationBackups){const b=new DatabaseSync(backup,{readOnly:true});try{check(b);}finally{b.close();}chmodSync(backup,0o600);}
    upgraded.close();upgraded=null;
    const reopened=openDb(candidate);try{check(reopened);if(reopened.migrationBackups.length)throw new Error('Reopen unexpectedly reran migrations');}finally{reopened.close();}
    copyFileSync(pristine,restored);chmodSync(restored,0o600);const rollback=new DatabaseSync(restored,{readOnly:true});try{check(rollback);if(rollback.prepare('PRAGMA user_version').get().user_version!==version)throw new Error('Restore version mismatch');compareHistorical(original,rollback);}finally{rollback.close();}
    const production=new DatabaseSync(source,{readOnly:true});try{if(production.prepare('PRAGMA user_version').get().user_version!==version)throw new Error('Source schema changed during rehearsal');}finally{production.close();}
-   report={ok:true,sourceVersion:version,candidateVersion:12,sourceOpenedReadOnly:true,historicalTables:preservation.tables,historicalRowsChecked:preservation.rows,historicalValuesPreserved:true,migrationSnapshots:12-version,reopenDidNotRerun:true,isolatedRestoreExact:true,integrity:'ok',foreignKeyErrors:0,retainedPrivately:true,at:new Date().toISOString()};
+   report={ok:true,sourceVersion:version,candidateVersion:13,sourceOpenedReadOnly:true,historicalTables:preservation.tables,historicalRowsChecked:preservation.rows,historicalValuesPreserved:true,migrationSnapshots:13-version,reopenDidNotRerun:true,isolatedRestoreExact:true,integrity:'ok',foreignKeyErrors:0,retainedPrivately:true,at:new Date().toISOString()};
    writeFileSync(join(directory,'summary.json'),JSON.stringify(report,null,2),{mode:0o600});return report;
  }finally{upgraded?.close();original.close();}
 }

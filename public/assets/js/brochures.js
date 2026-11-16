@@ -8,6 +8,27 @@ let category = '';
 let query = '';
 let page = 0;
 let pending;
+let destination = '';
+let selectedBrochure;
+let inquiryVersion = 0;
+const inquiry = dialog.querySelector('#brochure-inquiry');
+const inquiryStatus = inquiry.querySelector('#bh-inquiry-status');
+const globeSection = document.querySelector('#brochure-destinations');
+const stage = globeSection.querySelector('.bh-stage');
+const locations = globeSection.querySelector('.bh-destination-list');
+const cluster = globeSection.querySelector('.bh-cluster');
+const clearDestination = document.querySelector('#brochure-clear-destination');
+const jod = new Intl.NumberFormat('ar-JO', { maximumFractionDigits: 3 });
+let globe;
+let globeTask;
+let mapRequest;
+let mapVisible = false;
+let latestPins = [];
+
+function pinLabel(pin) {
+  return pin.destination_name + ' — ' + (pin.lowest_price_jod == null ? 'السعر عند الاستفسار' :
+    'ابتداءً من ' + jod.format(pin.lowest_price_jod) + ' دينار');
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -43,6 +64,12 @@ function download(link, url) {
 }
 
 function preview(brochure) {
+  selectedBrochure = brochure;
+  inquiryVersion++;
+  inquiry.reset();
+  inquiry.querySelector('[type=submit]').disabled = false;
+  inquiryStatus.textContent = '';
+  updateInquiryWhatsApp();
   dialog.querySelector('h2').textContent = brochure.title;
   const frame = dialog.querySelector('iframe');
   frame.src = brochure.preview_url;
@@ -89,7 +116,7 @@ async function load(reset = false) {
     grid.replaceChildren();
     more.hidden = true;
   }
-  const params = new URLSearchParams({ category, q: query, page: page + 1 });
+  const params = new URLSearchParams({ category, q: query, destination, page: page + 1 });
   status.textContent = 'جارٍ تحميل الكتيبات…';
   more.disabled = true;
   try {
@@ -115,16 +142,141 @@ async function load(reset = false) {
 filters.addEventListener('submit', event => {
   event.preventDefault();
   query = new FormData(filters).get('q').trim();
-  load(true);
+  refreshCatalogue();
 });
 tabs.addEventListener('click', event => {
   const button = event.target.closest('[data-category]');
   if (!button) return;
   category = button.dataset.category;
   for (const tab of tabs.children) tab.setAttribute('aria-pressed', String(tab === button));
-  load(true);
+  refreshCatalogue();
 });
 more.addEventListener('click', () => load());
 dialog.addEventListener('close', () => dialog.querySelector('iframe').removeAttribute('src'));
 download(dialog.querySelector('[data-download]'), '#');
-load(true);
+
+function updateInquiryWhatsApp() {
+  const url = new URL('https://wa.me/' + dialog.dataset.sales);
+  const question = inquiry.elements.message.value.trim();
+  url.searchParams.set('text', ['مرحبًا لوريت، أود الاستفسار عن كتيب «' + selectedBrochure.title + '».', question].filter(Boolean).join('\n'));
+  inquiry.querySelector('[data-inquiry-whatsapp]').href = url;
+}
+
+inquiry.addEventListener('input', updateInquiryWhatsApp);
+inquiry.querySelector('.bh-inquiry-chips').addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  inquiry.elements.message.value = button.textContent;
+  updateInquiryWhatsApp();
+  inquiry.elements.message.focus();
+});
+inquiry.addEventListener('submit', async event => {
+  event.preventDefault();
+  const message = inquiry.elements.message.value.trim();
+  if (message.length < 2) { inquiryStatus.textContent = 'اكتب سؤالك أولًا.'; return; }
+  const version = inquiryVersion;
+  const submit = inquiry.querySelector('[type=submit]');
+  submit.disabled = true;
+  inquiryStatus.textContent = 'جارٍ إرسال الاستفسار…';
+  try {
+    const response = await fetch('/api/inquiries', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ brochure_id: selectedBrochure.id, message, phone: inquiry.elements.phone.value.trim() }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'تعذّر إرسال الاستفسار.');
+    if (version === inquiryVersion) inquiryStatus.textContent = 'تم حفظ استفسارك. رقم الطلب #' + data.id;
+  } catch (error) {
+    if (version === inquiryVersion) inquiryStatus.textContent = error.message || 'تعذّر إرسال الاستفسار.';
+  } finally {
+    if (version === inquiryVersion) submit.disabled = false;
+  }
+});
+
+function selectDestination(pin, scroll = false) {
+  destination = pin?.key || '';
+  clearDestination.hidden = !pin;
+  clearDestination.textContent = pin ? 'إزالة فلتر ' + pin.destination_name + ' ×' : '';
+  cluster.hidden = true;
+  for (const button of locations.children) button.setAttribute('aria-pressed', String(button.dataset.destination === destination));
+  load(true);
+  if (scroll && pin) {
+    clearDestination.focus({ preventScroll: true });
+    clearDestination.scrollIntoView({ block: 'nearest' });
+  }
+}
+clearDestination.onclick = () => selectDestination(null);
+
+function locationButton(pin) {
+  const button = element('button', 'bh-location', pinLabel(pin));
+  button.type = 'button';
+  button.dataset.destination = pin.key;
+  button.setAttribute('aria-pressed', String(destination === pin.key));
+  button.onclick = () => selectDestination(pin, true);
+  return button;
+}
+
+function openPin(pins) {
+  if (pins.length === 1) { selectDestination(pins[0], true); return; }
+  cluster.querySelector('div').replaceChildren(...pins.map(locationButton));
+  cluster.hidden = false;
+  cluster.querySelector('button').focus();
+}
+
+function globeFallback() {
+  stage.hidden = true;
+}
+
+async function showGlobe() {
+  if (!mapVisible || !latestPins.length) return;
+  globeTask ??= (async () => {
+    stage.hidden = false;
+    const { mountGlobe } = await import('/assets/js/brochure-globe.js');
+    return mountGlobe(stage, { label: pinLabel, open: openPin, onFailure: globeFallback });
+  })().catch(() => { globeFallback(); return null; });
+  globe = await globeTask;
+  globe?.setPins(latestPins);
+  globe?.setActive(mapVisible && latestPins.length > 0 && !stage.hidden);
+  globe?.setDrawer(dialog.open);
+}
+
+if ('IntersectionObserver' in window) {
+  new IntersectionObserver(([entry]) => {
+    mapVisible = entry.isIntersecting;
+    if (mapVisible) void showGlobe();
+    else globe?.setActive(false);
+  }, { rootMargin: '120px' }).observe(globeSection);
+} else mapVisible = true;
+
+dialog.addEventListener('close', () => { inquiryVersion++; globe?.setDrawer(false); });
+dialog.addEventListener('focusin', () => globe?.setDrawer(true));
+
+async function loadDestinations() {
+  mapRequest?.abort();
+  const request = new AbortController();
+  mapRequest = request;
+  cluster.hidden = true;
+  try {
+    const params = new URLSearchParams({ category, q: query });
+    const response = await fetch('/api/brochures/map?' + params, { signal: request.signal });
+    if (!response.ok) throw new Error();
+    const { pins } = await response.json();
+    if (request.signal.aborted) return;
+    latestPins = pins;
+    locations.replaceChildren(...pins.map(locationButton));
+    globeSection.hidden = pins.length === 0;
+    if (!pins.length) globe?.setActive(false);
+    else void showGlobe();
+  } catch {
+    if (request.signal.aborted) return;
+    globe?.setActive(false);
+    globeSection.hidden = true;
+  }
+}
+
+function refreshCatalogue() {
+  selectDestination(null);
+  void loadDestinations();
+}
+
+refreshCatalogue();

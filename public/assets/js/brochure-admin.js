@@ -1,3 +1,45 @@
+function destinationControls(presets, brochure = {}) {
+  const fieldset = document.createElement('fieldset');
+  fieldset.className = 'bh-destination-fields';
+  const legend = document.createElement('legend');
+  legend.textContent = 'الموقع على خريطة العالم';
+  fieldset.append(legend);
+  const addField = (label, name, input) => {
+    const field = document.createElement('label');
+    field.className = 'field';
+    field.textContent = label;
+    input.name = name;
+    field.append(input);
+    fieldset.append(field);
+    return input;
+  };
+  const picker = addField('وجهة جاهزة', '', document.createElement('select'));
+  picker.add(new Option('اختر وجهة أو أدخل موقعًا يدويًا', ''));
+  presets.forEach((preset, i) => picker.add(new Option(preset.destination_name, String(i))));
+  const inputs = {};
+  for (const [name, label, limit, max] of [
+    ['destination_name','اسم الدبوس',100], ['country_code','رمز الدولة (مثل TR)',2],
+    ['latitude','خط العرض',0,90], ['longitude','خط الطول',0,180],
+  ]) {
+    const input = addField(label, name, document.createElement('input'));
+    input.value = brochure[name] ?? '';
+    if (limit) input.maxLength = limit;
+    else { input.type = 'number'; input.step = 'any'; input.min = -max; input.max = max; input.dir = 'ltr'; }
+    inputs[name] = input;
+  }
+  picker.onchange = () => {
+    if (picker.value === '') return;
+    const preset = presets[Number(picker.value)];
+    for (const [key, input] of Object.entries(inputs)) input.value = preset[key];
+    const destination = fieldset.form?.elements.namedItem('destination');
+    if (destination && !destination.value.trim()) destination.value = preset.destination_name;
+  };
+  const hint = document.createElement('small');
+  hint.textContent = 'يمكن تعديل الإحداثيات بعد الاختيار. اترك الإحداثيات فارغة لإبقاء الكتيب في البطاقات فقط.';
+  fieldset.append(hint);
+  return fieldset;
+}
+
 const MAX_PDF = 25 * 1024 * 1024;
 
 export async function mountBrochureAdmin(view) {
@@ -35,6 +77,7 @@ export async function mountBrochureAdmin(view) {
     </div></section>`;
   const at = selector => view.querySelector(selector);
   const form = at('#bh-upload');
+  form.querySelector('[type=submit]').before(destinationControls(categories.destinations));
   const list = at('#bh-list');
   const more = at('#bh-more');
   const feedback = at('#bh-upload-status');
@@ -163,7 +206,7 @@ export async function mountBrochureAdmin(view) {
     const save = document.createElement('button');
     save.className = 'btn btn-primary btn-sm';
     save.textContent = 'حفظ التغييرات';
-    editForm.append(save);
+    editForm.append(destinationControls(categories.destinations, brochure), save);
     editForm.onsubmit = async event => {
       event.preventDefault();
       save.disabled = true;
