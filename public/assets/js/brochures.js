@@ -13,17 +13,11 @@ let selectedBrochure;
 let inquiryVersion = 0;
 const inquiry = dialog.querySelector('#brochure-inquiry');
 const inquiryStatus = inquiry.querySelector('#bh-inquiry-status');
-const globeSection = document.querySelector('#brochure-destinations');
-const stage = globeSection.querySelector('.bh-stage');
-const locations = globeSection.querySelector('.bh-destination-list');
-const cluster = globeSection.querySelector('.bh-cluster');
+const destinationsSection = document.querySelector('#brochure-destinations');
+const locations = destinationsSection.querySelector('.bh-destination-list');
 const clearDestination = document.querySelector('#brochure-clear-destination');
 const jod = new Intl.NumberFormat('ar-JO', { maximumFractionDigits: 3 });
-let globe;
-let globeTask;
 let mapRequest;
-let mapVisible = false;
-let latestPins = [];
 
 function pinLabel(pin) {
   return pin.destination_name + ' — ' + (pin.lowest_price_jod == null ? 'السعر عند الاستفسار' :
@@ -197,7 +191,6 @@ function selectDestination(pin, scroll = false) {
   destination = pin?.key || '';
   clearDestination.hidden = !pin;
   clearDestination.textContent = pin ? 'إزالة فلتر ' + pin.destination_name + ' ×' : '';
-  cluster.hidden = true;
   for (const button of locations.children) button.setAttribute('aria-pressed', String(button.dataset.destination === destination));
   load(true);
   if (scroll && pin) {
@@ -216,61 +209,23 @@ function locationButton(pin) {
   return button;
 }
 
-function openPin(pins) {
-  if (pins.length === 1) { selectDestination(pins[0], true); return; }
-  cluster.querySelector('div').replaceChildren(...pins.map(locationButton));
-  cluster.hidden = false;
-  cluster.querySelector('button').focus();
-}
-
-function globeFallback() {
-  stage.hidden = true;
-}
-
-async function showGlobe() {
-  if (!mapVisible || !latestPins.length) return;
-  globeTask ??= (async () => {
-    stage.hidden = false;
-    const { mountGlobe } = await import('/assets/js/brochure-globe.js');
-    return mountGlobe(stage, { label: pinLabel, open: openPin, onFailure: globeFallback });
-  })().catch(() => { globeFallback(); return null; });
-  globe = await globeTask;
-  globe?.setPins(latestPins);
-  globe?.setActive(mapVisible && latestPins.length > 0 && !stage.hidden);
-  globe?.setDrawer(dialog.open);
-}
-
-if ('IntersectionObserver' in window) {
-  new IntersectionObserver(([entry]) => {
-    mapVisible = entry.isIntersecting;
-    if (mapVisible) void showGlobe();
-    else globe?.setActive(false);
-  }, { rootMargin: '120px' }).observe(globeSection);
-} else mapVisible = true;
-
-dialog.addEventListener('close', () => { inquiryVersion++; globe?.setDrawer(false); });
-dialog.addEventListener('focusin', () => globe?.setDrawer(true));
+dialog.addEventListener('close', () => { inquiryVersion++; });
 
 async function loadDestinations() {
   mapRequest?.abort();
   const request = new AbortController();
   mapRequest = request;
-  cluster.hidden = true;
   try {
     const params = new URLSearchParams({ category, q: query });
     const response = await fetch('/api/brochures/map?' + params, { signal: request.signal });
     if (!response.ok) throw new Error();
     const { pins } = await response.json();
     if (request.signal.aborted) return;
-    latestPins = pins;
     locations.replaceChildren(...pins.map(locationButton));
-    globeSection.hidden = pins.length === 0;
-    if (!pins.length) globe?.setActive(false);
-    else void showGlobe();
+    destinationsSection.hidden = pins.length === 0;
   } catch {
     if (request.signal.aborted) return;
-    globe?.setActive(false);
-    globeSection.hidden = true;
+    destinationsSection.hidden = true;
   }
 }
 
