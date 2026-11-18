@@ -7,6 +7,19 @@
   const arNum = (n) => Number(n || 0).toLocaleString('en-US');
   const TRANSITION_MS = 2000;
 
+  const announcement = $('#siteAnnouncement');
+  if (announcement && typeof announcement.showModal === 'function') {
+    const key = 'laurette:hajj-announcement-2026-11-19';
+    let seen = false;
+    try { seen = sessionStorage.getItem(key) === '1'; } catch { /* Storage may be unavailable. */ }
+    if (!seen) {
+      announcement.showModal();
+      const closeTimer = setTimeout(() => announcement.close(), 10000);
+      announcement.addEventListener('close', () => clearTimeout(closeTimer), { once: true });
+      try { sessionStorage.setItem(key, '1'); } catch { /* Storage may be unavailable. */ }
+    }
+  }
+
   function showTransition() {
     const overlay = $('#loretTransition');
     if (overlay) {

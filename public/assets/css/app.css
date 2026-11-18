@@ -75,6 +75,24 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 }
 .skip-link:focus { inset-block-start: 0; }
 
+.site-announcement {
+  position: fixed; inset: 0; margin: auto; padding: 0; border: 0;
+  max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px);
+  border-radius: 14px; background: transparent; overflow: hidden;
+}
+.site-announcement::backdrop { background: rgba(6, 24, 38, .75); }
+.site-announcement img {
+  display: block; width: auto; height: auto;
+  max-width: min(calc(100vw - 24px), 640px); max-height: calc(100dvh - 24px);
+  object-fit: contain;
+}
+.site-announcement button {
+  position: absolute; inset-block-start: 8px; inset-inline-end: 8px;
+  width: 44px; height: 44px; display: grid; place-items: center;
+  border: 1px solid #fff; border-radius: 50%; cursor: pointer;
+  font: 700 28px/1 system-ui, sans-serif; color: #fff; background: #073b39;
+}
+
 /* ---------- header ---------- */
 .site-header {
   position: sticky; inset-block-start: 0; z-index: 60;
