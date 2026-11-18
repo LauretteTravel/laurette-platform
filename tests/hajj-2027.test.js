@@ -12,8 +12,11 @@ test('Hajj landing serves standalone assets and saves interest in the existing r
   try {
     const page = await fetch(base + '/hajj-2027.html');
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /بداية الطريق/);
-    for (const asset of ['/assets/css/hajj-2027.css', '/assets/js/hajj-2027.js', '/assets/img/hajj-2027/makkah.jpg', '/assets/img/hajj-2027/madinah.jpg']) {
+    const markup = await page.text();
+    assert.match(markup, /الحج المميّز<br><em>مع لوريت/);
+    assert.match(markup, /شعار الحج المميز 1448هـ — 2027م/);
+    assert.doesNotMatch(markup, /نقطة انطلاق رحلة الصعود/);
+    for (const asset of ['/assets/css/hajj-2027.css', '/assets/js/hajj-2027.js', '/assets/img/hajj-2027/season-cover.jpg', '/assets/img/hajj-2027/makkah.jpg', '/assets/img/hajj-2027/madinah.jpg']) {
       assert.equal((await fetch(base + asset)).status, 200, asset);
     }
     const response = await fetch(base + '/api/requests', { method: 'POST',
