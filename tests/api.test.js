@@ -86,7 +86,7 @@ test('الصفحة الرئيسية تُعرض مع بيانات SEO منظّم�
   const dropdown = nav.match(/<details class="nav-dropdown">([\s\S]*?)<\/details>/)[0];
   assert.deepEqual([...dropdown.matchAll(/href="([^"]+)"/g)].map((link) => link[1]), ['/brochures', '/destinations', '/guide', '/jordan']);
   assert.deepEqual([...nav.replace(dropdown, '').matchAll(/href="([^"]+)"/g)].map((link) => link[1]),
-    ['/', '/offers', '/programs', '/umrah', '/flights', '/hotels', '/visa']);
+    ['/', '/offers', '/programs', '/umrah', '/hajj-2027', '/flights', '/hotels', '/visa']);
   assert.match(payload, /class="header-actions">\s*<a[^>]*href="\/account">حسابي<\/a>/);
   assert.match(payload, /<link rel="canonical"/);
   assert.match(payload, /application\/ld\+json/);
