@@ -504,6 +504,10 @@ export function createApp(options = {}) {
     ok: true, uptimeSeconds: Math.round((Date.now() - startedAt) / 1000), seeded: seedResult.seeded, programs: one(db, 'SELECT COUNT(*) n FROM programs').n,
   }));
 
+  // Seasonal Hajj landing with self-contained visual assets.
+  const hajjLanding = async ctx => html(ctx.res, 200, await readFile(join(PUBLIC_DIR, 'hajj-2027.html'), 'utf8'));
+  router.get('/hajj-2027', hajjLanding);
+  router.get('/hajj-2027.html', hajjLanding);
   /* ---------------- static ---------------- */
   async function serveStatic(req, res, pathname) {
     const rel = normalize(pathname).replace(/^([/\\])+/, '');
